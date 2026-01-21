@@ -10,6 +10,24 @@ from collaborative_based_filtering import collaborative_filtering_recommendation
 from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
+
+# Check for category query param to trigger search
+if 'search_input' not in st.session_state:
+    st.session_state['search_input'] = ""
+
+url_category = st.query_params.get("category")
+if url_category:
+    st.session_state['search_input'] = url_category
+    # Clear the query param so it doesn't stick
+    # Using empty dictionary to clear all params is easiest or specific key
+    # st.query_params.clear() # This might be too aggressive if we have user_id
+    # Instead, we should pop it or set it to empty? 
+    # Actually, let's just leave it or specific removal if supported. 
+    # Recent streamlit supports typical dict operations on query_params.
+    try:
+        del st.query_params["category"]
+    except:
+        pass
 st.markdown("""
 <style>
     .block-container {
@@ -96,35 +114,91 @@ st.markdown("""
         margin-bottom: 0px;
         line-height: 1.2;
     }
+    .horizontal-scroll-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .horizontal-scroll-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 20px;
+        padding: 10px 0;
+        scroll-behavior: smooth;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE 10+ */
+    }
+    .horizontal-scroll-container::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
+    }
+    .scroll-btn {
+        background-color: rgba(255, 255, 255, 0.8);
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+        color: #333;
+        cursor: pointer;
+        z-index: 10;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: background 0.3s, transform 0.2s;
+        position: absolute;
+    }
+    .scroll-btn:hover {
+        background-color: #fff;
+        transform: scale(1.1);
+    }
+    .scroll-btn.left {
+        left: 10px;
+    }
+    .scroll-btn.right {
+        right: 10px;
+    }
     .cat-img {
-        height: 150px;
+        height: 180px;
         width: 100%;
         object-fit: cover;
-        border-radius: 50%;
-        margin-bottom: 10px;
-        transition: transform 0.3s ease;
-        border: 2px solid #fff;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-radius: 15px;
+        transition: filter 0.3s ease, transform 0.3s ease;
+        border: none;
+        box-shadow: none;
+        filter: blur(2px) brightness(0.7); /* Blur added as requested */
     }
-    .cat-img:hover {
-        transform: scale(1.1);
-        border-color: #ff4b2b;
+    .cat-container:hover .cat-img {
+        transform: scale(1.03);
+        filter: blur(0px) brightness(0.6); /* Unblur on hover? Or keep blur? User said "background image should be slightly blurred". Let's keep it blurred but maybe less dark. */
     }
     .cat-label {
-        font-weight: bold;
-        color: #333;
-        margin-top: 10px;
-        text-align: center;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white; /* White text */
+        font-weight: 800;
+        font-size: 24px;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.8);
         width: 100%;
-        display: block;
-        font-size: 14px;
+        text-align: center;
+        margin-top: 0;
+        pointer-events: none;
     }
     .cat-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
+        position: relative;
+        display: block;
+        width: 100%;       /* Fluid width for grid columns */
+        /* min-width: 300px; REMOVED to prevent overlap in grid */
+        /* flex: 0 0 auto;   REMOVED as not needed for grid */
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         text-decoration: none;
+        margin-bottom: 0; /* No bottom margin needed in scroll row */
     }
     /* Smart Badge Styling */
     .badge {
@@ -519,13 +593,19 @@ def main():
         st.session_state['wishlists'] = {}                         
     try:
         query_params = st.query_params
-        q_category = query_params.get("category")
-        if q_category:
-             st.session_state['search_input'] = str(q_category).strip()
-             if hasattr(st, 'query_params'):
-                 st.query_params.clear()
-             elif hasattr(st, 'experimental_set_query_params'):
-                 st.experimental_set_query_params()
+        if 'prev_q_param' not in st.session_state:
+             st.session_state['prev_q_param'] = ""
+
+        # Sync URL -> Input (Only if URL changed)
+        current_q_param = query_params.get("category") or query_params.get("q") or ""
+        current_q_param = str(current_q_param).strip()
+        
+        if current_q_param != st.session_state['prev_q_param']:
+             if current_q_param:
+                 st.session_state['search_input'] = current_q_param
+             st.session_state['prev_q_param'] = current_q_param
+             # If URL changed (navigated), trust the page param
+        
         q_prod_id = query_params.get("product_id")
         if q_prod_id:
              q_prod_id = str(q_prod_id).strip()
@@ -684,52 +764,159 @@ def main():
                         st.error("No results found.")
                 else:
                     st.success(f"Found {len(search_results)} items.")
-                display_product_grid(search_results, section_key="search")
+                
+                # Pagination Logic
+                
+                # Get current page from URL or default to 1
+                try:
+                    query_params = st.query_params
+                    current_page = int(query_params.get("page", 1))
+                except:
+                    current_page = 1
+                
+                # If we are searching, ensure URL reflects it (Bidirectional Sync)
+                # But don't overwrite if it's just a page change
+                current_url_q = query_params.get("q", "")
+                current_url_cat = query_params.get("category", "")
+                
+                # If the active search query differs from what's in the URL, it means the User typed it.
+                # We should update URL and reset page to 1.
+                active_q_in_url = current_url_cat if current_url_cat else current_url_q
+                
+                if search_query and search_query != str(active_q_in_url).strip():
+                     # User typed new search
+                     st.query_params["q"] = search_query
+                     if "category" in st.query_params: del st.query_params["category"]
+                     st.query_params["page"] = 1
+                     current_page = 1
+                     # Update our prev tracker so we don't re-read it next run
+                     st.session_state['prev_q_param'] = search_query
+                
+                items_per_page = 20
+                total_items = len(search_results)
+                total_pages = (total_items + items_per_page - 1) // items_per_page if total_items > 0 else 1
+                
+                # Ensure current_page is valid
+                if current_page < 1: current_page = 1
+                if current_page > total_pages: current_page = total_pages
+                
+                start_idx = (current_page - 1) * items_per_page
+                end_idx = min(start_idx + items_per_page, total_items)
+                
+                paginated_results = search_results.iloc[start_idx:end_idx]
+                
+                display_product_grid(paginated_results, section_key="search")
+                
+                if total_pages > 1:
+                    st.markdown("---")
+                    
+                    # Link-Based Pagination for Scroll Reset
+                    start_p = max(1, min(current_page - 4, total_pages - 9) if total_pages > 9 else 1)
+                    end_p = min(start_p + 9, total_pages)
+                    page_range = range(start_p, end_p + 1)
+                    
+                    # Helper to generate link
+                    # We need to preserve current params: user_id, search_query (as q or category)
+                    # We construct the base URL query string
+                    
+                    base_params = []
+                    if target_user_id:
+                        base_params.append(f"user_id={target_user_id}")
+                    
+                    # Determine if we are searching by category or generic query
+                    q_cat = st.query_params.get("category")
+                    if q_cat:
+                         base_params.append(f"category={q_cat}")
+                    elif search_query:
+                         # If it's a generic search, put it in 'q'
+                         # We encode it simply here (simulated)
+                         base_params.append(f"q={search_query}")
+
+                    base_qs = "&".join(base_params)
+                    
+                    def make_link(p, text, active=False):
+                        if active:
+                            return f'<span style="padding: 5px 10px; border: 1px solid #ccc; margin: 0 2px; border-radius: 5px; background-color: #f0f0f0; color: #333; cursor: default;">{text}</span>'
+                        
+                        url = f"./?{base_qs}&page={p}"
+                        return f'<a href="{url}" target="_self" style="text-decoration: none; padding: 5px 10px; border: 1px solid #eee; margin: 0 2px; border-radius: 5px; color: #d63031; font-weight: bold;">{text}</a>'
+
+                    # Build HTML for pagination
+                    pagination_html = '<div style="display: flex; justify-content: center; align-items: center; margin-top: 20px;">'
+                    
+                    # Prev
+                    if current_page > 1:
+                        pagination_html += make_link(current_page - 1, "◀")
+                    else:
+                        pagination_html += '<span style="padding: 5px 10px; margin: 0 2px; color: #ccc;">◀</span>'
+                    
+                    # Pages
+                    for p_num in page_range:
+                        is_current = (p_num == current_page)
+                        pagination_html += make_link(p_num, str(p_num), active=is_current)
+                        
+                    # Next
+                    if current_page < total_pages:
+                        pagination_html += make_link(current_page + 1, "▶")
+                    else:
+                        pagination_html += '<span style="padding: 5px 10px; margin: 0 2px; color: #ccc;">▶</span>'
+                    
+                    pagination_html += '</div>'
+                    
+                    st.markdown(pagination_html, unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Search error: {e}")
         else:
             st.markdown("<div class='section-header'>📦 Shop by Category</div>", unsafe_allow_html=True)
-            cat_cols = st.columns(6)
+            
             categories = [
-                {"name": "Nail Polish", "img": "https://images.unsplash.com/photo-1604654894610-df63bc536371?q=80&w=300&auto=format&fit=crop"},
-                {"name": "Skin Care", "img": "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?q=80&w=300&auto=format&fit=crop"},
-                {"name": "Hair Care", "img": "https://images.unsplash.com/photo-1562322140-8baeececf3df?q=80&w=300&auto=format&fit=crop"},
-                {"name": "Makeup", "img": "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?q=80&w=300&auto=format&fit=crop"},
-                {"name": "Fragrance", "img": "https://images.unsplash.com/photo-1541643600914-78b084683601?q=80&w=300&auto=format&fit=crop"},
-                {"name": "Lips", "img": "https://images.unsplash.com/photo-1586495777744-4413f21062fa?q=80&w=300&auto=format&fit=crop"}
+                {"name": "Household", "img": "https://mastcert.com/wp-content/uploads/2023/05/bytovaya-himiya.jpg?q=80&w=600&auto=format&fit=crop"},
+                {"name": "Men's Grooming", "img": "https://blogscdn.thehut.net/wp-content/uploads/sites/32/2018/04/17133037/1200x672_217775857-MC-MK-April-photography-batching-Shot14_1200x672_acf_cropped_1200x672_acf_cropped.jpg?q=80&w=600&auto=format&fit=crop"},
+                {"name": "Fragrance", "img": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=600&auto=format&fit=crop"},
+                {"name": "Hair Care", "img": "https://images.unsplash.com/photo-1560869713-7d0a29430803?q=80&w=600&auto=format&fit=crop"},
+                {"name": "Nail Polish", "img": "https://www.makeup.com/-/media/project/loreal/brand-sites/mdc/americas/us/articles/2023/01-january/04-does-nail-polish-expire/does-nail-polish-expire-hero-mudc-122722.jpg?cx=0.5&cy=0.5&cw=705&ch=529&blr=False&hash=92FB2BCC56C0A381A75826D5939CFF96?q=80&w=600&auto=format&fit=crop"},
+                {"name": "Makeup", "img": "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?q=80&w=600&auto=format&fit=crop"}
             ]
+            
+            # Render as horizontal scrolling HTML container with buttons
+            # We use a unique ID for the container to target it with JS
+            # Replaced persistent iframe with native Streamlit Grid for reliable clicking
+            cat_cols = st.columns(6)
             for i, cat in enumerate(categories):
-                with cat_cols[i]:
-                    cat_name = cat['name']
-                    img_url = cat['img']
-                    st.markdown(
-                        f'<a href="./?category={cat_name}" target="_self" class="cat-container">'
+                with cat_cols[i % 6]:
+                     cat_name = cat['name']
+                     img_url = cat['img']
+                     st.markdown(
+                        f'<a href="./?category={cat_name}&user_id={target_user_id}" target="_self" class="cat-container">'
                         f'<img src="{img_url}" class="cat-img" title="Shop {cat_name}">'
                         f'<div class="cat-label">{cat_name}</div>'
                         f'</a>',
                         unsafe_allow_html=True
-                    )
-            if target_user_id == 0:
-                st.markdown("<div class='section-header'>🌟 Top Rated Products for New Customers</div>", unsafe_allow_html=True)
-                try:
-                    top_rated_new = get_top_rated_items(data, top_n=8)
-                    top_rated_new = sort_by_rating(top_rated_new)
-                    display_product_grid(top_rated_new, section_key="new_cust_top")
-                except Exception as e:
-                    st.error(f"Error fetching top rated items: {e}")
-            else:
-                st.markdown(f"<div class='section-header'>⭐ Previously Rated by You (User {target_user_id})</div>", unsafe_allow_html=True)
-                try:
-                    user_history = data[data['ID'] == target_user_id]
-                    if not user_history.empty:
-                         user_history = user_history.drop_duplicates(subset=['ProdID'])
-                         latest_rated = user_history.tail(4)
-                         latest_rated = latest_rated.iloc[::-1] 
-                         display_product_grid(latest_rated, section_key="prev_rated")
-                    else:
-                         st.info("You haven't rated any products yet.")
-                except Exception as e:
-                    st.error(f"Error loading user history: {e}")
+                     )
+            # Only show recommendations if NOT searching
+            if not search_active:
+                if target_user_id == 0:
+                    st.markdown("<div class='section-header'>🌟 Top Rated Products for New Customers</div>", unsafe_allow_html=True)
+                    try:
+                        top_rated_new = get_top_rated_items(data, top_n=8)
+                        top_rated_new = sort_by_rating(top_rated_new)
+                        display_product_grid(top_rated_new, section_key="new_cust_top")
+                    except Exception as e:
+                        st.error(f"Error fetching top rated items: {e}")
+                else:
+                    st.markdown(f"<div class='section-header'>⭐ Previously Rated by You (User {target_user_id})</div>", unsafe_allow_html=True)
+                    try:
+                        user_history = data[data['ID'] == target_user_id]
+                        if not user_history.empty:
+                             user_history = user_history.drop_duplicates(subset=['ProdID'])
+                             latest_rated = user_history.tail(4)
+                             latest_rated = latest_rated.iloc[::-1] 
+                             display_product_grid(latest_rated, section_key="prev_rated")
+                        else:
+                             st.info("You haven't rated any products yet.")
+                    except Exception as e:
+                        st.error(f"Error loading user history: {e}")
+                
                 st.markdown("<div class='section-header'>🔥 Best Sellers</div>", unsafe_allow_html=True)
                 try:
                     top_rated = get_top_rated_items(data, top_n=4)
@@ -746,21 +933,24 @@ def main():
                         display_product_grid(collab_recs, section_key="collab")
                 except:
                     pass
-    st.markdown("<div class='section-header'>🔥 Top Deals of the Week</div>", unsafe_allow_html=True)
-    try:
-        if 'Price' in data.columns:
-            deals = data[(data['Rating'] >= 4.0) & (data['Price'] < 40.0)]
-            if len(deals) < 4:
-                deals = data[data['Price'] < 50.0].sort_values(by='Rating', ascending=False)
-            deals = deals.sort_values(by='Price', ascending=True).head(4)
-            if not deals.empty:
-                display_product_grid(deals, section_key="top_deals")
-            else:
-                 st.info("No top deals available this week.")
-        else:
-             st.info("Deals are updating...")
-    except Exception as e:
-        pass
+    
+            # Top Deals also only show if not searching
+            if not search_active:
+                 st.markdown("<div class='section-header'>🔥 Top Deals of the Week</div>", unsafe_allow_html=True)
+                 try:
+                     if 'Price' in data.columns:
+                         deals = data[(data['Rating'] >= 4.0) & (data['Price'] < 40.0)]
+                         if len(deals) < 4:
+                             deals = data[data['Price'] < 50.0].sort_values(by='Rating', ascending=False)
+                         deals = deals.sort_values(by='Price', ascending=True).head(4)
+                         if not deals.empty:
+                             display_product_grid(deals, section_key="top_deals")
+                         else:
+                              st.info("No top deals available this week.")
+                     else:
+                          st.info("Deals are updating...")
+                 except Exception as e:
+                     pass
     st.markdown("---")
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
