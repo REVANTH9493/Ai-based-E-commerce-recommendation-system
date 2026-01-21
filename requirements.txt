@@ -3,4 +3,7 @@ numpy
 scikit-learn
 streamlit==1.39.0
 altair==5.5.0
+<<<<<<< HEAD
 
+=======
+>>>>>>> e51e4a9c526f36fa8d5bf7d7b636c7062b31c8a4
