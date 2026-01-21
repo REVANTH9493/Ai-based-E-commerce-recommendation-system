@@ -2,12 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import random
+import streamlit.components.v1 as components
+
 from preprocess_data import process_data
 from rating_based_recommendation import get_top_rated_items
 from content_based_filtering import content_based_recommendation
 from collaborative_based_filtering import collaborative_filtering_recommendations
 from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
+
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
 st.markdown("""
 <style>
@@ -15,7 +18,6 @@ st.markdown("""
         padding-top: 5rem;
         padding-bottom: 2rem;
     }
-    /* Product Card Styling */
     div[data-testid="column"] {
         background-color: #ffffff;
         border: 1px solid #e0e0e0;
@@ -177,11 +179,8 @@ def set_selected_product(product):
     """Callback to set the selected product in session state."""
     st.session_state['selected_product'] = product
 def clear_query_params():
-    """Clears query params to prevent sticking to the detail view on refresh, but KEEP user_id."""
-    current_user_id = st.query_params.get("user_id")
+    """Clears query params to prevent sticking to the detail view on refresh."""
     st.query_params.clear()
-    if current_user_id:
-        st.query_params["user_id"] = current_user_id
 @st.cache_data
 def load_and_process_data():
     """Loads and processes the dataset once."""
@@ -293,6 +292,7 @@ def view_cart():
             )
             if st.button("Remove", key=f"rm_{i}"):
                 st.session_state['cart_items'].pop(i)
+                st.rerun()
     with col_summary:
         st.markdown(
             f"""
@@ -320,12 +320,59 @@ def view_cart():
             st.toast("Order Placed Successfully! 🎉")
             st.session_state['cart_items'] = []
             st.session_state['show_cart'] = False
+            st.rerun()
 def view_product_details(product_row, data):
     """Renders the detailed view of a selected product."""
+    # Robust scroll-to-top using MutationObserver to fight Streamlit's scroll restoration
+    components.html("""
+        <script>
+            function enforceScrollTop() {
+                var targets = [
+                    window.parent.document.querySelector('[data-testid="stAppViewContainer"]'),
+                    window.parent.document.querySelector('section.main'),
+                    window.parent.document.documentElement,
+                    window.parent.document.body
+                ];
+                
+                targets.forEach(function(target) {
+                    if (target) {
+                        target.scrollTop = 0;
+                        target.scrollTo({top: 0, behavior: 'auto'});
+                    }
+                });
+            }
 
-    if st.button("← Back to Shopping"):
+            // 1. Immediate scroll
+            enforceScrollTop();
+
+            // 2. Continuous check for the first second (most aggressive)
+            var checkCount = 0;
+            var interval = setInterval(function() {
+                enforceScrollTop();
+                checkCount++;
+                if (checkCount > 100) clearInterval(interval); // Stop after ~1s (10ms * 100)
+            }, 10);
+
+            // 3. MutationObserver to catch late DOM updates
+            var observer = new MutationObserver(function(mutations) {
+                enforceScrollTop();
+            });
+            
+            var container = window.parent.document.querySelector('[data-testid="stAppViewContainer"]') || window.parent.document.body;
+            observer.observe(container, { childList: true, subtree: true, attributes: true });
+
+            // Disconnect observer after 2 seconds to free resources
+            setTimeout(function() {
+                observer.disconnect();
+                clearInterval(interval);
+            }, 2000);
+        </script>
+    """, height=0)
+    current_id = product_row['ProdID']
+    def go_back():
         set_selected_product(None)
         clear_query_params()
+    st.button("← Back to Shopping", on_click=go_back)
     st.markdown("---")
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -377,18 +424,10 @@ def display_product_card(product_row, key_suffix=""):
              badge_html = "<div class='badge'>🏆 Top Rated</div>"
         elif rating_val >= 4.0:
              badge_html = "<div class='badge badge-value'>✨ Great Value</div>"
-        # Append user_id to the link if it exists
-        user_id_param = st.session_state.get('target_user_id', '')
-        link_url = f"./?product_id={prod_id}"
-        if user_id_param:
-             link_url += f"&user_id={user_id_param}"
-        
         st.markdown(
             f'<div class="product-card-container">'
             f'{badge_html}'
-            f'<a href="{link_url}" target="_self">'
-            f'<img src="{image_url}" class="product-img" title="Click to view details">'
-            f'</a>'
+            f'<img src="{image_url}" class="product-img">'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -410,6 +449,7 @@ def display_product_card(product_row, key_suffix=""):
         if st.button("Add", key=f"btn_add_{prod_id}_{key_suffix}"):
             st.session_state['cart_items'].append(product_row.to_dict())
             st.toast(f"Added to Cart! 🛒 ({len(st.session_state['cart_items'])})")
+            st.rerun()
 def display_product_grid(products_df, section_key):
     """Renders a grid of product cards."""
     if products_df is None or products_df.empty:
@@ -432,12 +472,10 @@ def main():
         q_category = query_params.get("category")
         if q_category:
              st.session_state['search_input'] = str(q_category).strip()
-             qp_user = st.query_params.get("user_id")
              if hasattr(st, 'query_params'):
                  st.query_params.clear()
-                 if qp_user: st.query_params["user_id"] = qp_user
              elif hasattr(st, 'experimental_set_query_params'):
-                 st.experimental_set_query_params(user_id=qp_user) if qp_user else st.experimental_set_query_params()
+                 st.experimental_set_query_params()
         q_prod_id = query_params.get("product_id")
         if q_prod_id:
              q_prod_id = str(q_prod_id).strip()
@@ -447,8 +485,6 @@ def main():
                  st.toast(f"Auto-loading Product: {q_prod_id}")
                  if hasattr(st, 'query_params'):
                      st.query_params.clear()
-                     if 'user_id' in query_params:
-                         st.query_params['user_id'] = query_params['user_id']
                  elif hasattr(st, 'experimental_set_query_params'):
                      st.experimental_set_query_params()
     except Exception as e:
@@ -464,32 +500,27 @@ def main():
              pass
     with st.sidebar:
         st.title("👤 Account")
-        # Initialize User ID from Query Params if available
         if 'target_user_id' not in st.session_state:
-            qp_user_id = st.query_params.get("user_id")
-            if qp_user_id:
-                try:
-                    st.session_state['target_user_id'] = int(qp_user_id)
-                except:
-                    st.session_state['target_user_id'] = 4
-            else:
-                st.session_state['target_user_id'] = 4
+            st.session_state['target_user_id'] = 0  # Default value
 
-        def update_user_id_param():
-             st.query_params["user_id"] = st.session_state['target_user_id']
+        def update_user_id():
+            st.session_state['target_user_id'] = st.session_state['user_id_widget']
 
-        target_user_id = st.number_input(
+        st.number_input(
             "User ID (Simulation)", 
-            min_value=1, 
-            step=1, 
-            key='target_user_id',
-            on_change=update_user_id_param
+            min_value=0, 
+            step=1,
+            value=st.session_state['target_user_id'],
+            key="user_id_widget",
+            on_change=update_user_id
         )
+        target_user_id = st.session_state['target_user_id']
         st.divider()
         st.subheader("Navigation")
         if st.button("🏠 Home"):
             set_selected_product(None)
             clear_query_params()
+            st.rerun()
         st.radio("Go to:", ["Wishlist", "Orders"], label_visibility="collapsed")
         st.divider()
         st.subheader("Filters")
@@ -506,7 +537,7 @@ def main():
     else:
         col1, col2, col3 = st.columns([3, 2, 0.5])
         with col1:
-             st.markdown('<h1 class="title-text">AI-Based Ecommerce<br>Recommendation System</h1>', unsafe_allow_html=True)
+             st.markdown('<h1 class="title-text">AI-Based E-commerce<br>Recommendation System</h1>', unsafe_allow_html=True)
         with col2:
             st.markdown('<div style="margin-top: 25px;"></div>', unsafe_allow_html=True)
             if 'search_input' not in st.session_state:
@@ -518,6 +549,7 @@ def main():
              cart_count = len(st.session_state.get('cart_items', []))
              if st.button(f"🛒 {cart_count}", key="nav_cart_btn"):
                  st.session_state['show_cart'] = True
+                 st.rerun()
         if st.session_state.get('show_cart', False):
              view_cart()
         elif is_filtering:
@@ -550,39 +582,63 @@ def main():
                 {"name": "Fragrance", "img": "https://images.unsplash.com/photo-1541643600914-78b084683601?q=80&w=300&auto=format&fit=crop"},
                 {"name": "Lips", "img": "https://images.unsplash.com/photo-1586495777744-4413f21062fa?q=80&w=300&auto=format&fit=crop"}
             ]
-
             for i, cat in enumerate(categories):
                 with cat_cols[i]:
                     cat_name = cat['name']
                     img_url = cat['img']
-                    user_id_param = st.session_state.get('target_user_id', '')
-                    cat_link = f"./?category={cat_name}"
-                    if user_id_param:
-                        cat_link += f"&user_id={user_id_param}"
-
                     st.markdown(
-                        f'<a href="{cat_link}" target="_self" class="cat-container">'
+                        f'<a href="./?category={cat_name}" target="_self" class="cat-container">'
                         f'<img src="{img_url}" class="cat-img" title="Shop {cat_name}">'
                         f'<div class="cat-label">{cat_name}</div>'
                         f'</a>',
                         unsafe_allow_html=True
                     )
-            st.markdown("<div class='section-header'>🔥 Best Sellers</div>", unsafe_allow_html=True)
-            try:
-                top_rated = get_top_rated_items(data, top_n=4)
-                top_rated = sort_by_rating(top_rated)
-                display_product_grid(top_rated, section_key="top_rated")
-            except:
-                pass
-            st.markdown(f"<div class='section-header'>💙 Recommended for You (User {target_user_id})</div>", unsafe_allow_html=True)
-            try:
-                collab_recs = collaborative_filtering_recommendations(data, target_user_id=target_user_id, top_n=12)
-                collab_recs = sort_by_rating(collab_recs)
-                collab_recs = collab_recs.iloc[:12]
-                if not collab_recs.empty:
-                    display_product_grid(collab_recs, section_key="collab")
-            except:
-                pass
+            
+            # Recently Viewed (Session History) - for ALL users
+
+
+            if target_user_id == 0:
+                st.markdown("<div class='section-header'>🌟 Top Rated Products for New Customers</div>", unsafe_allow_html=True)
+                try:
+                    top_rated_new = get_top_rated_items(data, top_n=8)
+                    top_rated_new = sort_by_rating(top_rated_new)
+                    display_product_grid(top_rated_new, section_key="new_cust_top")
+                except Exception as e:
+                    st.error(f"Error fetching top rated items: {e}")
+            else:
+                # Previously Rated (User History)
+                st.markdown(f"<div class='section-header'>⭐ Previously Rated by You (User {target_user_id})</div>", unsafe_allow_html=True)
+                try:
+                    # Filter data for the current user and take the last 4 items (assuming order implies recency)
+                    user_history = data[data['ID'] == target_user_id]
+                    if not user_history.empty:
+                         # Ensure we don't show duplicates if the user rated the same item multiple times (optional, but good practice)
+                         user_history = user_history.drop_duplicates(subset=['ProdID'])
+                         latest_rated = user_history.tail(4)
+                         # Reverse to show most recent first if the csv is chronological
+                         latest_rated = latest_rated.iloc[::-1] 
+                         display_product_grid(latest_rated, section_key="prev_rated")
+                    else:
+                         st.info("You haven't rated any products yet.")
+                except Exception as e:
+                    st.error(f"Error loading user history: {e}")
+
+                st.markdown("<div class='section-header'>🔥 Best Sellers</div>", unsafe_allow_html=True)
+                try:
+                    top_rated = get_top_rated_items(data, top_n=4)
+                    top_rated = sort_by_rating(top_rated)
+                    display_product_grid(top_rated, section_key="top_rated")
+                except:
+                    pass
+                st.markdown(f"<div class='section-header'>💙 Recommended for You (User {target_user_id})</div>", unsafe_allow_html=True)
+                try:
+                    collab_recs = collaborative_filtering_recommendations(data, target_user_id=target_user_id, top_n=12)
+                    collab_recs = sort_by_rating(collab_recs)
+                    collab_recs = collab_recs.iloc[:12]
+                    if not collab_recs.empty:
+                        display_product_grid(collab_recs, section_key="collab")
+                except:
+                    pass
     st.markdown("---")
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
