@@ -2,6 +2,9 @@
 
 A smart e-commerce application built with Streamlit that leverages machine learning to provide personalized product recommendations.
 
+## 🚀 Live Demo
+**Check out the live application here:** [AI-Based E-Commerce Recommendation System](https://ai-based-e-commerce-recommendation-system-revanth.streamlit.app/)
+
 ## 🌟 Features
 
 - **Interactive User Interface**: Built with Streamlit for a smooth and responsive experience.
