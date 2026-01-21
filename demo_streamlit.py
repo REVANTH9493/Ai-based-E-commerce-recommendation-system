@@ -171,6 +171,38 @@ st.markdown("""
         border-radius: 10px;
         border: 1px solid #eee;
     }
+    .wishlist-icon {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+        font-size: 20px;
+        text-decoration: none;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: transform 0.2s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .wishlist-icon:hover {
+        transform: scale(1.1);
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .wishlist-icon.active {
+        color: #ff4b4b;
+    }
+    .wishlist-icon.inactive {
+        color: #ccc;
+    }
+    .product-card-container {
+        position: relative;
+    }
 </style>
 """, unsafe_allow_html=True)
 if 'selected_product' not in st.session_state:
@@ -178,9 +210,31 @@ if 'selected_product' not in st.session_state:
 def set_selected_product(product):
     """Callback to set the selected product in session state."""
     st.session_state['selected_product'] = product
+
+def toggle_wishlist_func(prod_id):
+    """Callback to toggle wishlist item without page reload."""
+    target_uid = st.session_state.get('target_user_id', 0)
+    if 'wishlists' not in st.session_state:
+        st.session_state['wishlists'] = {}
+    
+    if target_uid not in st.session_state['wishlists']:
+        st.session_state['wishlists'][target_uid] = []
+    
+    user_list = st.session_state['wishlists'][target_uid]
+    
+    if prod_id in user_list:
+        user_list.remove(prod_id)
+        # st.toast(f"Removed 💔") # Toast might stack up, keep it simple
+    else:
+        user_list.append(prod_id)
+        # st.toast(f"Added ❤️")
+
 def clear_query_params():
     """Clears query params to prevent sticking to the detail view on refresh."""
+    current_uid = st.query_params.get("user_id")
     st.query_params.clear()
+    if current_uid:
+        st.query_params["user_id"] = current_uid
 @st.cache_data
 def load_and_process_data():
     """Loads and processes the dataset once."""
@@ -424,9 +478,23 @@ def display_product_card(product_row, key_suffix=""):
              badge_html = "<div class='badge'>🏆 Top Rated</div>"
         elif rating_val >= 4.0:
              badge_html = "<div class='badge badge-value'>✨ Great Value</div>"
+        
+        # Wishlist Logic (Fast Button)
+        target_uid = st.session_state.get('target_user_id', 0)
+        user_wishlist = st.session_state.get('wishlists', {}).get(target_uid, [])
+        is_in_wishlist = prod_id in user_wishlist
+        heart_symbol = "❤️" if is_in_wishlist else "🤍"
+        
+        # Layout: Use columns to place heart button 'top right' of card area
+        # We can't easily overlay on image without HTML link (slow), so we place it just above.
+        c_spacer, c_heart = st.columns([0.8, 0.2])
+        with c_heart:
+            st.button(heart_symbol, key=f"wish_btn_{prod_id}_{key_suffix}", on_click=toggle_wishlist_func, args=(prod_id,), help="Add to Wishlist")
+
         st.markdown(
             f'<div class="product-card-container">'
             f'{badge_html}'
+            # Removed HTML wishlist link
             f'<img src="{image_url}" class="product-img">'
             f'</div>',
             unsafe_allow_html=True
@@ -465,8 +533,20 @@ def main():
     data = load_and_process_data()
     if data is None:
         return
+    
+    # Simulate Price column if it doesn't exist (for sorting purposes)
+    if 'Price' not in data.columns:
+        np.random.seed(42) # For consistent prices across reruns
+        data['Price'] = np.random.uniform(15.0, 100.0, size=len(data)).round(2)
+
     if 'cart_items' not in st.session_state:
         st.session_state['cart_items'] = []
+    
+    if 'wishlists' not in st.session_state:
+        st.session_state['wishlists'] = {} # {user_id: [prod_ids]}
+
+    # Handle Wishlist Toggle -> Logic moved to st.button callback (toggle_wishlist_func)
+    
     try:
         query_params = st.query_params
         q_category = query_params.get("category")
@@ -501,10 +581,19 @@ def main():
     with st.sidebar:
         st.title("👤 Account")
         if 'target_user_id' not in st.session_state:
-            st.session_state['target_user_id'] = 0  # Default value
+            # Try to get from URL first
+            url_uid = st.query_params.get("user_id")
+            if url_uid:
+                try:
+                    st.session_state['target_user_id'] = int(url_uid)
+                except:
+                    st.session_state['target_user_id'] = 0
+            else:
+                st.session_state['target_user_id'] = 0
 
         def update_user_id():
             st.session_state['target_user_id'] = st.session_state['user_id_widget']
+            st.query_params["user_id"] = st.session_state['target_user_id']
 
         st.number_input(
             "User ID (Simulation)", 
@@ -517,21 +606,62 @@ def main():
         target_user_id = st.session_state['target_user_id']
         st.divider()
         st.subheader("Navigation")
-        if st.button("🏠 Home"):
+        # Initialize active_section if not present
+        if 'active_section' not in st.session_state:
+            st.session_state['active_section'] = 'Home'
+
+        if st.button("🏠 Home", use_container_width=True):
             set_selected_product(None)
+            st.session_state['search_input'] = ""
+            st.session_state['active_section'] = 'Home'
             clear_query_params()
             st.rerun()
-        st.radio("Go to:", ["Wishlist", "Orders"], label_visibility="collapsed")
+            
+        col_nav1, col_nav2 = st.columns(2)
+        with col_nav1:
+            if st.button("❤️ Wishlist", use_container_width=True):
+                st.session_state['active_section'] = 'Wishlist'
+                st.rerun()
+        with col_nav2:
+             if st.button("📦 Orders", use_container_width=True):
+                st.session_state['active_section'] = 'Orders'
+                st.rerun()
         st.divider()
-        st.subheader("Filters")
-        all_brands = sorted(data['Brand'].dropna().unique().tolist())
-        selected_brands = st.multiselect("Brand", all_brands)
-        min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
+        
+        # Check if we should show filters (if search is active or filters already applied)
+        show_filters = False
+        search_active = st.session_state.get('search_input', '') != ''
+        
+        # We need to define selected_brands and min_rating early to avoid NameErrors
+        selected_brands = []
+        min_rating = 0.0
+        sort_option = "Relevance"
+
+        if search_active:
+             show_filters = True
+
+        if show_filters:
+            st.subheader("Filters & Sorting")
+            sort_option = st.selectbox("Sort By", ["Relevance", "Price: Low to High", "Price: High to Low", "Rating: High to Low"])
+            
+            all_brands = sorted(data['Brand'].dropna().unique().tolist())
+            selected_brands = st.multiselect("Brand", all_brands)
+            min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
+        
         filtered_data = data.copy()
         if selected_brands:
             filtered_data = filtered_data[filtered_data['Brand'].isin(selected_brands)]
         filtered_data = filtered_data[filtered_data['Rating'] >= min_rating]
-        is_filtering = (selected_brands or min_rating > 3.0)
+        
+        # Apply sorting to filtered_data (if it's being used directly)
+        if sort_option == "Price: Low to High":
+             filtered_data = filtered_data.sort_values(by='Price', ascending=True)
+        elif sort_option == "Price: High to Low":
+             filtered_data = filtered_data.sort_values(by='Price', ascending=False)
+        elif sort_option == "Rating: High to Low":
+             filtered_data = filtered_data.sort_values(by='Rating', ascending=False)
+        
+        is_filtering = (selected_brands or min_rating > 3.0) and not search_active
     if st.session_state['selected_product'] is not None:
         view_product_details(st.session_state['selected_product'], data)
     else:
@@ -552,6 +682,32 @@ def main():
                  st.rerun()
         if st.session_state.get('show_cart', False):
              view_cart()
+        elif st.session_state.get("active_section") == "Orders":
+             st.markdown(f"<div class='section-header'>📦 Your Orders (User ID: {target_user_id})</div>", unsafe_allow_html=True)
+             # Filter data for this user
+             # Assuming 'ID' in CSV corresponds to User ID
+             if 'ID' in data.columns:
+                 user_orders = data[data['ID'] == target_user_id]
+                 if user_orders.empty:
+                     st.info(f"No previous orders found for User {target_user_id}.")
+                 else:
+                     st.success(f"Found {len(user_orders)} past orders.")
+                     display_product_grid(user_orders, section_key="orders")
+             else:
+                 st.error("Order data not available (ID column missing).")
+        elif st.session_state.get("active_section") == "Wishlist":
+             st.markdown(f"<div class='section-header'>❤️ Your Wishlist (User ID: {target_user_id})</div>", unsafe_allow_html=True)
+             w_list = st.session_state.get('wishlists', {}).get(target_user_id, [])
+             if not w_list:
+                 st.info("Your wishlist is empty. Click the ❤️ on products to add them!")
+             else:
+                 # Filter data for wishlist items
+                 wishlist_products = data[data['ProdID'].isin(w_list)]
+                 if wishlist_products.empty:
+                      st.warning("Wishlist items found, but product details are missing from database.")
+                 else:
+                      st.success(f"Found {len(wishlist_products)} items in your wishlist.")
+                      display_product_grid(wishlist_products, section_key="wishlist")
         elif is_filtering:
              st.markdown(f"<div class='section-header'>🔍 Filtered Results ({len(filtered_data)})</div>", unsafe_allow_html=True)
              display_product_grid(filtered_data, section_key="filtered")
@@ -559,7 +715,23 @@ def main():
             st.markdown(f"<div class='section-header'>Results for '{search_query}'</div>", unsafe_allow_html=True)
             try:
                 search_results = data[data['Name'].astype(str).str.contains(search_query, case=False, na=False)]
-                search_results = sort_by_rating(search_results)
+                
+                # Apply filters to search results too
+                if selected_brands:
+                    search_results = search_results[search_results['Brand'].isin(selected_brands)]
+                search_results = search_results[search_results['Rating'] >= min_rating]
+
+                # Apply Sorting
+                if sort_option == "Price: Low to High":
+                     search_results = search_results.sort_values(by='Price', ascending=True)
+                elif sort_option == "Price: High to Low":
+                     search_results = search_results.sort_values(by='Price', ascending=False)
+                elif sort_option == "Rating: High to Low":
+                     search_results = search_results.sort_values(by='Rating', ascending=False)
+                else:
+                     # Relevance (default) - usually just the search match, maybe sort by rating as tie breaker
+                     search_results = sort_by_rating(search_results)
+
                 if search_results.empty:
                     st.warning(f"No products found matching '{search_query}'. Trying hybrid recommendation...")
                     search_results = hybrid_recommendation_filtering(data, item_name=search_query, target_user_id=target_user_id, top_n=10)
@@ -639,6 +811,33 @@ def main():
                         display_product_grid(collab_recs, section_key="collab")
                 except:
                     pass
+
+    
+    # "Top Deals of the Week" - Visible to ALL users
+    st.markdown("<div class='section-header'>🔥 Top Deals of the Week</div>", unsafe_allow_html=True)
+    try:
+        # Define 'Deal' as High Rating (> 4.0) AND Low Price (< 40.0)
+        # Using the 'Price' column we simulated
+        if 'Price' in data.columns:
+            deals = data[(data['Rating'] >= 4.0) & (data['Price'] < 40.0)]
+            if len(deals) < 4:
+                # Relax criteria if not enough deals
+                deals = data[data['Price'] < 50.0].sort_values(by='Rating', ascending=False)
+            
+            # Sort by Price increasing (cheaper is better deal)
+            deals = deals.sort_values(by='Price', ascending=True).head(4)
+            
+            if not deals.empty:
+                display_product_grid(deals, section_key="top_deals")
+            else:
+                 st.info("No top deals available this week.")
+        else:
+             # Fallback if Price column missing (shouldn't happen with our sim)
+             st.info("Deals are updating...")
+    except Exception as e:
+        # st.error(f"Error processing deals: {e}")
+        pass
+
     st.markdown("---")
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
