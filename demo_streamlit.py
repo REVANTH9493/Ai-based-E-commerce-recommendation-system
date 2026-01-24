@@ -110,7 +110,7 @@ st.markdown("""
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800 !important;
-        padding-top: 0px;
+        padding-top: 20px;
         margin-bottom: 0px;
         line-height: 1.2;
     }
@@ -650,6 +650,7 @@ def login_page(data):
                             if uid in data['ID'].values:
                                 st.session_state['logged_in'] = True
                                 st.session_state['target_user_id'] = uid
+                                st.query_params['user_id'] = str(uid) # Persist to URL
                                 st.success("Login Successful!")
                                 st.rerun()
                             else:
@@ -674,6 +675,7 @@ def login_page(data):
                     
                     st.session_state['logged_in'] = True
                     st.session_state['target_user_id'] = new_id
+                    st.query_params['user_id'] = str(new_id) # Persist to URL
                     st.success(f"Account Created! Your User ID is **{new_id}**. Please remember it.")
                     st.info(f"Your default password is 'infosys@123'.")
                     st.rerun()
@@ -757,8 +759,8 @@ def main():
         st.markdown('<h1 class="title-text" style="text-align: left; margin-bottom: 5px;">AI-Based E-commerce Recommendation System</h1>', unsafe_allow_html=True)
     with h_col2:
         # Align search bar to match title visual baseline
-        st.markdown('<style>div[data-testid="stTextInput"] { width: 300px; margin-left: auto; }</style>', unsafe_allow_html=True)
-        st.markdown('<div style="margin-top: 5px;"></div>', unsafe_allow_html=True)
+        st.markdown('<style>div[data-testid="stTextInput"] { width: 300px; margin-left: auto; margin-top: 20px; }</style>', unsafe_allow_html=True)
+        # Spacer removed for better alignment
         if 'search_input' not in st.session_state:
             st.session_state['search_input'] = ""
         search_query = st.text_input("Search", value=st.session_state['search_input'], placeholder="🔍 Search...", label_visibility="collapsed", key="search_widget_header")
@@ -814,6 +816,7 @@ def main():
              st.session_state['logged_in'] = False
              st.session_state['target_user_id'] = 0
              st.session_state['active_section'] = 'Home'
+             st.query_params.clear() # Clear URL persistence
              st.rerun()
         st.divider()
 
