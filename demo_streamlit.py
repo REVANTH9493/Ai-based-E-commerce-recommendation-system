@@ -924,7 +924,8 @@ def main():
                     display_product_grid(top_rated, section_key="top_rated")
                 except:
                     pass
-                st.markdown(f"<div class='section-header'>💙 Recommended for You (User {target_user_id})</div>", unsafe_allow_html=True)
+                if target_user_id!=0:
+                    st.markdown(f"<div class='section-header'>💙 Recommended for You (User {target_user_id})</div>", unsafe_allow_html=True)
                 try:
                     collab_recs = collaborative_filtering_recommendations(data, target_user_id=target_user_id, top_n=12)
                     collab_recs = sort_by_rating(collab_recs)
