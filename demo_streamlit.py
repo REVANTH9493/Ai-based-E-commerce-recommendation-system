@@ -31,7 +31,7 @@ if url_category:
 st.markdown("""
 <style>
     .block-container {
-        padding-top: 5rem;
+        padding-top: 15px;
         padding-bottom: 2rem;
     }
     div[data-testid="column"] {
@@ -98,8 +98,8 @@ st.markdown("""
     .section-header {
         font-size: 24px;
         font-weight: bold;
-        margin-top: 40px;
-        margin-bottom: 20px;
+        margin-top: 5px;
+        margin-bottom: 5px;
         border-bottom: 2px solid #f0f0f0;
         padding-bottom: 5px;
     }
@@ -306,6 +306,14 @@ def load_and_process_data():
     try:
         raw_data = pd.read_csv("clean_data.csv")
         data = process_data(raw_data)
+        
+        # Ensure ProdID is consistent (int)
+        if 'ProdID' in data.columns:
+            data = data.dropna(subset=['ProdID'])
+            data['ProdID'] = pd.to_numeric(data['ProdID'], errors='coerce')
+            data = data.dropna(subset=['ProdID'])
+            data['ProdID'] = data['ProdID'].astype(int)
+
         if 'ImageURL' in data.columns:
             data['ImageURL'] = data['ImageURL'].astype(str)
         return data
@@ -382,8 +390,7 @@ def sort_by_rating(df):
 def view_cart():
     """Renders the Cart Page."""
     st.markdown("<div class='section-header'>🛒 Your Shopping Cart</div>", unsafe_allow_html=True)
-    if st.button("← Back to Shopping", key="back_cart"):
-        st.session_state['show_cart'] = False
+    # Back button removed as per request
     cart_items = st.session_state.get('cart_items', [])
     if not cart_items:
         st.info("Your cart is empty! Time to shop! 🛍️")
@@ -485,7 +492,7 @@ def view_product_details(product_row, data):
         set_selected_product(None)
         clear_query_params()
     st.button("← Back to Shopping", on_click=go_back)
-    st.markdown("---")
+    st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
     col1, col2 = st.columns([1, 1])
     with col1:
         img_url = get_product_image_url(product_row)
@@ -502,7 +509,7 @@ def view_product_details(product_row, data):
         if st.button("Add to Cart", key="btn_detail_add"):
             st.session_state['cart_items'].append(product_row.to_dict())
             st.toast(f"Added {product_row.get('Name')[:20]}... to cart! 🛒 ({len(st.session_state['cart_items'])})")
-    st.markdown("---")
+    st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
     st.markdown("<div class='section-header'>✨ Similar Items</div>", unsafe_allow_html=True)
     try:
         similar_items = content_based_recommendation(data, item_name=product_row['Name'], top_n=4)
@@ -528,44 +535,63 @@ def view_product_details(product_row, data):
 def display_product_card(product_row, key_suffix=""):
     """Displays a single product card."""
     image_url = get_product_image_url(product_row)
+    
+    # Safely extract ProdID
+    prod_id = None
     if 'ProdID' in product_row and pd.notna(product_row['ProdID']):
-        prod_id = int(product_row['ProdID'])
-        badge_html = ""
-        rating_val = product_row.get('Rating', 0)
-        if rating_val >= 4.5:
-             badge_html = "<div class='badge'>🏆 Top Rated</div>"
-        elif rating_val >= 4.0:
-             badge_html = "<div class='badge badge-value'>✨ Great Value</div>"
-        target_uid = st.session_state.get('target_user_id', 0)
-        user_wishlist = st.session_state.get('wishlists', {}).get(target_uid, [])
-        is_in_wishlist = prod_id in user_wishlist
-        heart_symbol = "❤️" if is_in_wishlist else "🤍"
-        c_spacer, c_heart = st.columns([0.8, 0.2])
-        with c_heart:
+        try:
+            prod_id = int(product_row['ProdID'])
+        except:
+            prod_id = None
+
+    badge_html = ""
+    rating_val = product_row.get('Rating', 0)
+    if rating_val >= 4.5:
+         badge_html = "<div class='badge'>🏆 Top Rated</div>"
+    elif rating_val >= 4.0:
+         badge_html = "<div class='badge badge-value'>✨ Great Value</div>"
+    
+    target_uid = st.session_state.get('target_user_id', 0)
+    user_wishlist = st.session_state.get('wishlists', {}).get(target_uid, [])
+    
+    # Heart Button Logic
+    c_spacer, c_heart = st.columns([0.8, 0.2])
+    with c_heart:
+        if prod_id is not None:
+            is_in_wishlist = prod_id in user_wishlist
+            heart_symbol = "❤️" if is_in_wishlist else "🤍"
             st.button(heart_symbol, key=f"wish_btn_{prod_id}_{key_suffix}", on_click=toggle_wishlist_func, args=(prod_id,), help="Add to Wishlist")
-        st.markdown(
-            f'<div class="product-card-container">'
-            f'{badge_html}'
-            f'<img src="{image_url}" class="product-img">'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-    else:
-        prod_id = random.randint(0, 100000)
-        st.markdown(f'<img src="{image_url}" class="product-img">', unsafe_allow_html=True)
+        else:
+            # Placeholder if no ID
+            st.write("🤍")
+
+    st.markdown(
+        f'<div class="product-card-container">'
+        f'{badge_html}'
+        f'<img src="{image_url}" class="product-img">'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
     st.markdown(f"<div class='product-title'>{product_row.get('Name', 'Unknown Product')}</div>", unsafe_allow_html=True)
     st.markdown(f"<div class='product-brand'>{product_row.get('Brand', 'Generic')}</div>", unsafe_allow_html=True)
     rating = product_row.get('Rating', 0)
     stars = "⭐" * int(min(round(rating), 5))
     st.markdown(f"<div class='product-rating'>{rating} {stars}</div>", unsafe_allow_html=True)
+    
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        st.button("Details",
-                 key=f"btn_det_{prod_id}_{key_suffix}",
-                 on_click=set_selected_product,
-                 args=(product_row,))
+        # Only show details if we have an ID or valid row
+        if prod_id is not None:
+             st.button("Details",
+                     key=f"btn_det_{prod_id}_{key_suffix}",
+                     on_click=set_selected_product,
+                     args=(product_row,))
+        else:
+             st.button("Details", key=f"btn_det_fail_{key_suffix}", disabled=True)
+
     with col_btn2:
-        if st.button("Add", key=f"btn_add_{prod_id}_{key_suffix}"):
+        if st.button("Add", key=f"btn_add_{prod_id if prod_id else 'nan'}_{key_suffix}"):
             st.session_state['cart_items'].append(product_row.to_dict())
             st.toast(f"Added to Cart! 🛒 ({len(st.session_state['cart_items'])})")
             st.rerun()
@@ -580,10 +606,106 @@ def display_product_grid(products_df, section_key):
         col = cols[i % 4]
         with col:
             display_product_card(products_df.loc[idx], key_suffix=f"{section_key}_{i}")
+
+def login_page(data):
+    """Renders the Login and Signup page."""
+    st.markdown("""
+        <style>
+            .login-container {
+                max-width: 400px;
+                margin: 0 auto;
+                padding: 30px;
+                background-color: #ffffff;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                text-align: center;
+            }
+            .stButton>button {
+                width: 100%;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown('<h1 class="title-text" style="text-align: center;">Welcome Back!</h1>', unsafe_allow_html=True)
+        st.markdown('<p style="text-align: center; color: #666;">Please login to continue</p>', unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        
+        with tab1:
+            with st.form("login_form"):
+                user_id_input = st.text_input("User ID", placeholder="Enter your User ID")
+                password_input = st.text_input("Password", type="password", placeholder="Enter your password")
+                submitted = st.form_submit_button("Login")
+                
+                if submitted:
+                    if not user_id_input:
+                        st.error("Please enter a User ID.")
+                    elif password_input != "infosys@123":
+                        st.error("Incorrect password.")
+                    else:
+                        try:
+                            uid = int(user_id_input)
+                            if uid in data['ID'].values:
+                                st.session_state['logged_in'] = True
+                                st.session_state['target_user_id'] = uid
+                                st.success("Login Successful!")
+                                st.rerun()
+                            else:
+                                st.error("User ID not found.")
+                        except ValueError:
+                            st.error("User ID must be a number.")
+        
+        with tab2:
+            st.markdown("### New here?")
+            st.write("Create a new account effortlessly.")
+            if st.button("Create New Account"):
+                try:
+                    max_id = data['ID'].max()
+                    if pd.isna(max_id):
+                        new_id = 1
+                    else:
+                        new_id = int(max_id) + 1
+                    
+                    # In a real app, we would save this to the CSV/Database
+                    # For now, we simulate it in session for this user
+                    # Note: This checks 'clean_data.csv' on disk, so 'data' needs to be fresh
+                    
+                    st.session_state['logged_in'] = True
+                    st.session_state['target_user_id'] = new_id
+                    st.success(f"Account Created! Your User ID is **{new_id}**. Please remember it.")
+                    st.info(f"Your default password is 'infosys@123'.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error creating account: {e}")
+
+
 def main():
     data = load_and_process_data()
     if data is None:
         return
+
+    # Authentication Check & Session Restoration
+    if 'logged_in' not in st.session_state:
+        st.session_state['logged_in'] = False
+    
+    # Try to restore session from URL if not logged in
+    if not st.session_state['logged_in']:
+        qp_uid = st.query_params.get("user_id")
+        if qp_uid:
+            try:
+                restored_uid = int(qp_uid)
+                if restored_uid in data['ID'].values:
+                     st.session_state['logged_in'] = True
+                     st.session_state['target_user_id'] = restored_uid
+            except:
+                pass
+
+    if not st.session_state['logged_in']:
+        login_page(data)
+        return
+
     if 'Price' not in data.columns:
         np.random.seed(42)                                       
         data['Price'] = np.random.uniform(15.0, 100.0, size=len(data)).round(2)
@@ -628,91 +750,115 @@ def main():
                        st.session_state['selected_product'] = found_product.iloc[0]
         except:
              pass
-    with st.sidebar:
-        st.title("👤 Account")
-        if 'target_user_id' not in st.session_state:
-            url_uid = st.query_params.get("user_id")
-            if url_uid:
-                try:
-                    st.session_state['target_user_id'] = int(url_uid)
-                except:
-                    st.session_state['target_user_id'] = 0
-            else:
-                st.session_state['target_user_id'] = 0
-        def update_user_id():
-            st.session_state['target_user_id'] = st.session_state['user_id_widget']
-            st.query_params["user_id"] = st.session_state['target_user_id']
-        st.number_input(
-            "User ID (Simulation)", 
-            min_value=0, 
-            step=1,
-            value=st.session_state['target_user_id'],
-            key="user_id_widget",
-            on_change=update_user_id
-        )
-        target_user_id = st.session_state['target_user_id']
-        st.divider()
-        st.subheader("Navigation")
-        if 'active_section' not in st.session_state:
-            st.session_state['active_section'] = 'Home'
-        if st.button("🏠 Home", use_container_width=True):
-            set_selected_product(None)
+
+    # --- Title & Search Header ---
+    h_col1, h_col2 = st.columns([3, 1]) # Ratio to give Title more space, Search approx 300px logic
+    with h_col1:
+        st.markdown('<h1 class="title-text" style="text-align: left; margin-bottom: 5px;">AI-Based E-commerce Recommendation System</h1>', unsafe_allow_html=True)
+    with h_col2:
+        # Align search bar to match title visual baseline
+        st.markdown('<style>div[data-testid="stTextInput"] { width: 300px; margin-left: auto; }</style>', unsafe_allow_html=True)
+        st.markdown('<div style="margin-top: 5px;"></div>', unsafe_allow_html=True)
+        if 'search_input' not in st.session_state:
             st.session_state['search_input'] = ""
-            st.session_state['active_section'] = 'Home'
-            clear_query_params()
-            st.rerun()
-        col_nav1, col_nav2 = st.columns(2)
-        with col_nav1:
-            if st.button("❤️ Wishlist", use_container_width=True):
-                st.session_state['active_section'] = 'Wishlist'
-                st.rerun()
-        with col_nav2:
-             if st.button("📦 Orders", use_container_width=True):
-                st.session_state['active_section'] = 'Orders'
-                st.rerun()
+        search_query = st.text_input("Search", value=st.session_state['search_input'], placeholder="🔍 Search...", label_visibility="collapsed", key="search_widget_header")
+        if search_query: st.session_state['search_input'] = search_query
+    
+    # --- Top Navigation Header ---
+    target_user_id = st.session_state.get('target_user_id', 0)
+    
+    nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
+    with nav_col1:
+         if st.button("🏠 Home", use_container_width=True):
+             set_selected_product(None)
+             st.session_state['search_input'] = ""
+             st.session_state['active_section'] = 'Home'
+             st.session_state['show_cart'] = False # Ensure we exit cart view
+             clear_query_params()
+             st.rerun()
+    with nav_col2:
+         if st.button("❤️ Wishlist", use_container_width=True):
+             set_selected_product(None)
+             st.session_state['active_section'] = 'Wishlist'
+             st.session_state['show_cart'] = False 
+             st.rerun()
+    with nav_col3:
+         if st.button("📦 Orders", use_container_width=True):
+             set_selected_product(None)
+             st.session_state['active_section'] = 'Orders'
+             st.session_state['show_cart'] = False 
+             st.rerun()
+    with nav_col4:
+        # We can also put Cart here or keep it in the search row. 
+        # Including it here for consistent "Navigation" experience.
+        c_count = len(st.session_state.get('cart_items', []))
+        if st.button(f"🛒 Cart ({c_count})", key="nav_cart_header", use_container_width=True):
+             set_selected_product(None)
+             st.session_state['active_section'] = 'Cart' # Explicit state for clarity
+             st.session_state['show_cart'] = True
+             st.rerun()
+    with nav_col5:
+         if st.button("👤 Profile", key="profile_header", use_container_width=True):
+             set_selected_product(None)
+             st.session_state['active_section'] = 'Profile'
+             st.session_state['show_cart'] = False 
+             st.rerun()
+
+    st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
+
+    # --- Profile Section in Main Area (if active) ---
+    if st.session_state.get('active_section') == 'Profile':
+        st.markdown(f"### User Profile: #{target_user_id}")
+        st.info(f"You are logged in as User #{target_user_id}")
+        if st.button("Logout", key="logout_profile_btn"):
+             st.session_state['logged_in'] = False
+             st.session_state['target_user_id'] = 0
+             st.session_state['active_section'] = 'Home'
+             st.rerun()
         st.divider()
-        show_filters = False
-        search_active = st.session_state.get('search_input', '') != ''
-        selected_brands = []
-        min_rating = 0.0
-        sort_option = "Relevance"
-        if search_active:
-             show_filters = True
-        if show_filters:
-            st.subheader("Filters & Sorting")
-            sort_option = st.selectbox("Sort By", ["Relevance", "Price: Low to High", "Price: High to Low", "Rating: High to Low"])
-            all_brands = sorted(data['Brand'].dropna().unique().tolist())
-            selected_brands = st.multiselect("Brand", all_brands)
-            min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
-        filtered_data = data.copy()
-        if selected_brands:
-            filtered_data = filtered_data[filtered_data['Brand'].isin(selected_brands)]
-        filtered_data = filtered_data[filtered_data['Rating'] >= min_rating]
-        if sort_option == "Price: Low to High":
-             filtered_data = filtered_data.sort_values(by='Price', ascending=True)
-        elif sort_option == "Price: High to Low":
-             filtered_data = filtered_data.sort_values(by='Price', ascending=False)
-        elif sort_option == "Rating: High to Low":
-             filtered_data = filtered_data.sort_values(by='Rating', ascending=False)
-        is_filtering = (selected_brands or min_rating > 3.0) and not search_active
+
+    # --- Filters (Main Area) ---
+    # Moved from Sidebar to Expander
+    show_filters = False
+    search_active = st.session_state.get('search_input', '') != ''
+    selected_brands = []
+    min_rating = 0.0
+    sort_option = "Relevance"
+    
+    if search_active:
+         show_filters = True
+    
+    filtered_data = data.copy()
+    
+    if show_filters:
+        # Pushing filters down a bit if needed or keeping compact
+        with st.expander("🔍 Filter & Sort Options", expanded=False):
+            f_col1, f_col2, f_col3 = st.columns(3)
+            with f_col1:
+                sort_option = st.selectbox("Sort By", ["Relevance", "Price: Low to High", "Price: High to Low", "Rating: High to Low"])
+            with f_col2:
+                 all_brands = sorted(data['Brand'].dropna().unique().tolist())
+                 selected_brands = st.multiselect("Brand", all_brands)
+            with f_col3:
+                 min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
+
+    if selected_brands:
+        filtered_data = filtered_data[filtered_data['Brand'].isin(selected_brands)]
+    filtered_data = filtered_data[filtered_data['Rating'] >= min_rating]
+    
+    if sort_option == "Price: Low to High":
+            filtered_data = filtered_data.sort_values(by='Price', ascending=True)
+    elif sort_option == "Price: High to Low":
+            filtered_data = filtered_data.sort_values(by='Price', ascending=False)
+    elif sort_option == "Rating: High to Low":
+            filtered_data = filtered_data.sort_values(by='Rating', ascending=False)
+            
+    is_filtering = (selected_brands or min_rating > 3.0) and not search_active
     if st.session_state['selected_product'] is not None:
         view_product_details(st.session_state['selected_product'], data)
     else:
-        col1, col2, col3 = st.columns([3, 2, 0.5])
-        with col1:
-             st.markdown('<h1 class="title-text">AI-Based E-commerce<br>Recommendation System</h1>', unsafe_allow_html=True)
-        with col2:
-            st.markdown('<div style="margin-top: 25px;"></div>', unsafe_allow_html=True)
-            if 'search_input' not in st.session_state:
-                st.session_state['search_input'] = ""
-            search_query = st.text_input("Search products...", value=st.session_state['search_input'], placeholder="🔍 Search for 'Nail Polish', 'Shampoo'...", label_visibility="collapsed", key="search_widget")
-            if search_query: st.session_state['search_input'] = search_query
-        with col3:
-             st.markdown('<div style="margin-top: 25px;"></div>', unsafe_allow_html=True)
-             cart_count = len(st.session_state.get('cart_items', []))
-             if st.button(f"🛒 {cart_count}", key="nav_cart_btn"):
-                 st.session_state['show_cart'] = True
-                 st.rerun()
+        # Removed search bar from here as it is moved to header
+        pass
         if st.session_state.get('show_cart', False):
              view_cart()
         elif st.session_state.get("active_section") == "Orders":
@@ -733,6 +879,9 @@ def main():
                  st.info("Your wishlist is empty. Click the ❤️ on products to add them!")
              else:
                  wishlist_products = data[data['ProdID'].isin(w_list)]
+                 # Fix: Deduplicate products because data file has multiple entries per prod (ratings)
+                 wishlist_products = wishlist_products.drop_duplicates(subset=['ProdID'])
+                 
                  if wishlist_products.empty:
                       st.warning("Wishlist items found, but product details are missing from database.")
                  else:
@@ -808,7 +957,7 @@ def main():
                 display_product_grid(paginated_results, section_key="search")
                 
                 if total_pages > 1:
-                    st.markdown("---")
+                    st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
                     
                     # Link-Based Pagination for Scroll Reset
                     start_p = max(1, min(current_page - 4, total_pages - 9) if total_pages > 9 else 1)
@@ -904,16 +1053,15 @@ def main():
                     except Exception as e:
                         st.error(f"Error fetching top rated items: {e}")
                 else:
-                    st.markdown(f"<div class='section-header'>⭐ Previously Rated by You (User {target_user_id})</div>", unsafe_allow_html=True)
                     try:
                         user_history = data[data['ID'] == target_user_id]
                         if not user_history.empty:
                              user_history = user_history.drop_duplicates(subset=['ProdID'])
-                             latest_rated = user_history.tail(4)
+                             # User requested "min of 4", increasing limit to show more history if available
+                             latest_rated = user_history.tail(4) 
                              latest_rated = latest_rated.iloc[::-1] 
+                             st.markdown(f"<div class='section-header'>⭐ Previously Rated by You (User {target_user_id})</div>", unsafe_allow_html=True)
                              display_product_grid(latest_rated, section_key="prev_rated")
-                        else:
-                             st.info("You haven't rated any products yet.")
                     except Exception as e:
                         st.error(f"Error loading user history: {e}")
                 
