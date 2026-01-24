@@ -871,7 +871,7 @@ def main():
             
             categories = [
                 {"name": "Household", "img": "https://mastcert.com/wp-content/uploads/2023/05/bytovaya-himiya.jpg?q=80&w=600&auto=format&fit=crop"},
-                {"name": "Men's Grooming", "img": "https://blogscdn.thehut.net/wp-content/uploads/sites/32/2018/04/17133037/1200x672_217775857-MC-MK-April-photography-batching-Shot14_1200x672_acf_cropped_1200x672_acf_cropped.jpg?q=80&w=600&auto=format&fit=crop"},
+                {"name": "Grooming", "img": "https://blogscdn.thehut.net/wp-content/uploads/sites/32/2018/04/17133037/1200x672_217775857-MC-MK-April-photography-batching-Shot14_1200x672_acf_cropped_1200x672_acf_cropped.jpg?q=80&w=600&auto=format&fit=crop"},
                 {"name": "Fragrance", "img": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=600&auto=format&fit=crop"},
                 {"name": "Hair Care", "img": "https://images.unsplash.com/photo-1560869713-7d0a29430803?q=80&w=600&auto=format&fit=crop"},
                 {"name": "Nail Polish", "img": "https://www.makeup.com/-/media/project/loreal/brand-sites/mdc/americas/us/articles/2023/01-january/04-does-nail-polish-expire/does-nail-polish-expire-hero-mudc-122722.jpg?cx=0.5&cy=0.5&cw=705&ch=529&blr=False&hash=92FB2BCC56C0A381A75826D5939CFF96?q=80&w=600&auto=format&fit=crop"},
