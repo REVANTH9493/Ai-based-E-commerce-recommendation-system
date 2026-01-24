@@ -59,7 +59,8 @@ st.markdown("""
     .product-img {
         height: 200px;
         width: 100%;
-        object-fit: contain;
+        object-fit: cover;
+        object-position: center;
         margin-bottom: 10px;
         border-radius: 4px;
         transition: transform 0.3s ease;
@@ -71,7 +72,8 @@ st.markdown("""
     .detail-img {
         height: 400px;
         width: 100%;
-        object-fit: contain;
+        object-fit: cover;
+        object-position: center;
         border-radius: 8px;
         border: 1px solid #eee;
     }
