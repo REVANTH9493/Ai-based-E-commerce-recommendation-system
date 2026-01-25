@@ -10,10 +10,19 @@ from collaborative_based_filtering import collaborative_filtering_recommendation
 from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
+if "payment_done" not in st.session_state:
+    st.session_state["payment_done"] = False
 
-# Check for category query param to trigger search
-if 'search_input' not in st.session_state:
-    st.session_state['search_input'] = ""
+if "cart_items" not in st.session_state:
+    st.session_state["cart_items"] = []
+
+if st.query_params.get("payment") == "success":
+    st.session_state["payment_done"] = True
+    st.session_state["cart_items"] = []
+    st.session_state["show_payment"] = False
+    st.session_state["show_cart"] = False
+    st.session_state["active_section"] = "Orders"
+    st.query_params.clear()
 
 url_category = st.query_params.get("category")
 if url_category:
@@ -442,11 +451,55 @@ def view_cart():
         )
         st.markdown("")
         if st.button("Proceed to Checkout 💳", use_container_width=True):
-            st.balloons()
-            st.toast("Order Placed Successfully! 🎉")
-            st.session_state['cart_items'] = []
-            st.session_state['show_cart'] = False
-            st.rerun()
+            st.session_state["show_payment"] = True
+def show_payment():
+    st.markdown("<div class='section-header'>💳 Payment</div>", unsafe_allow_html=True)
+
+    cart_items = st.session_state.get("cart_items", [])
+    if not cart_items:
+        st.warning("Cart is empty.")
+        return
+
+    # Demo total calculation
+    total_amount = len(cart_items) * 499  # demo price
+    st.subheader(f"Amount to Pay: ₹{total_amount}")
+
+    components.html(f"""
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <button id="rzp-button"
+    style="
+    padding:14px 28px;
+    background:#0d6efd;
+    color:white;
+    border:none;
+    border-radius:6px;
+    font-size:16px;
+    cursor:pointer;">
+    Pay with Razorpay (Test)
+    </button>
+
+    <script>
+    var options = {{
+        "key": "rzp_test_S80byHh8aVKzjq",
+        "amount": "{total_amount * 100}",
+        "currency": "INR",
+        "name": "AI E-Commerce Demo",
+        "description": "Test Payment",
+        "handler": function (response) {{
+            alert("Payment Successful!\\nPayment ID: " + response.razorpay_payment_id);
+            window.location.search = "?payment=success";
+        }}
+    }};
+    var rzp = new Razorpay(options);
+    document.getElementById("rzp-button").onclick = function(e) {{
+        rzp.open();
+        e.preventDefault();
+    }};
+    </script>
+    """, height=700)
+
+
 def view_product_details(product_row, data):
     """Renders the detailed view of a selected product."""
     components.html("""
@@ -707,6 +760,9 @@ def main():
     if not st.session_state['logged_in']:
         login_page(data)
         return
+    if st.session_state.get("payment_done"):
+        st.success("🎉 Payment successful! Your order has been placed.")
+        st.session_state["payment_done"] = False
 
     if 'Price' not in data.columns:
         np.random.seed(42)                                       
@@ -776,6 +832,7 @@ def main():
              st.session_state['search_input'] = ""
              st.session_state['active_section'] = 'Home'
              st.session_state['show_cart'] = False # Ensure we exit cart view
+             st.session_state['show_payment'] = False 
              clear_query_params()
              st.rerun()
     with nav_col2:
@@ -783,6 +840,7 @@ def main():
              set_selected_product(None)
              st.session_state['active_section'] = 'Wishlist'
              st.session_state['show_cart'] = False 
+             st.session_state['show_payment'] = False
              st.rerun()
     with nav_col3:
          if st.button("📦 Orders", use_container_width=True):
@@ -798,12 +856,14 @@ def main():
              set_selected_product(None)
              st.session_state['active_section'] = 'Cart' # Explicit state for clarity
              st.session_state['show_cart'] = True
+             st.session_state['show_payment'] = False
              st.rerun()
     with nav_col5:
          if st.button("👤 Profile", key="profile_header", use_container_width=True):
              set_selected_product(None)
              st.session_state['active_section'] = 'Profile'
-             st.session_state['show_cart'] = False 
+             st.session_state['show_cart'] = False
+             st.session_state['show_payment'] = False
              st.rerun()
 
     st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
@@ -862,7 +922,9 @@ def main():
     else:
         # Removed search bar from here as it is moved to header
         pass
-        if st.session_state.get('show_cart', False):
+        if st.session_state.get("show_payment", False):
+             show_payment()
+        elif st.session_state.get('show_cart', False):
              view_cart()
         elif st.session_state.get("active_section") == "Orders":
              st.markdown(f"<div class='section-header'>📦 Your Orders (User ID: {target_user_id})</div>", unsafe_allow_html=True)
