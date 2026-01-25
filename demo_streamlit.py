@@ -691,7 +691,17 @@ def main():
     data = load_and_process_data()
     if data is None:
         return
-    render_chatbot_ui(data)
+    
+    # Determine visibility (Only on Home)
+    active_section = st.session_state.get('active_section', 'Home')
+    # Default is Home if not set. But if user is searching (search_active), it's technically still "Home" view usually
+    # unless we treat Search as separate. The prompt says "Home screen".
+    # Typically Search, Home, Filtered are all the same "Shop" page.
+    # Cart, Profile, Orders, Wishlist are different.
+    is_home_screen = active_section == 'Home'
+    
+    # render_chatbot_ui(data, visible=is_home_screen)  <-- Moved to end of main
+
     # Authentication Check & Session Restoration
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
@@ -1108,6 +1118,10 @@ def main():
                  except Exception as e:
                      pass
     st.markdown("---")
+    
+    # Render Chatbot LAST to ensure it overlays on top of everything
+    render_chatbot_ui(data, visible=is_home_screen)
+    
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
     main()
