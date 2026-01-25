@@ -13,9 +13,14 @@ def hybrid_recommendation_filtering(data:pd.DataFrame, item_name:str, target_use
     return hybrid_approach
 
 if __name__ == "__main__":
-    import pandas as pd
-    raw_data = pd.read_csv("clean_data.csv")
-    data = process_data(raw_data)
+    from firebase_utils import get_data_from_firebase
+    # raw_data = pd.read_csv("clean_data.csv")
+    raw_data = get_data_from_firebase()
+    if raw_data is not None:
+         data = process_data(raw_data)
+    else:
+         print("Failed to load data")
+         exit()
     from preprocess_data import process_data
 
     item_name = "OPI Infinite Shine, Nail Lacquer Nail Polish, Bubble Bath"

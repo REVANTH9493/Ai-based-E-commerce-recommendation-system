@@ -3,7 +3,11 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-data = pd.read_csv("clean_data.csv")
+from firebase_utils import get_data_from_firebase
+data = get_data_from_firebase()
+if data is None:
+    print("Failed to load data")
+    exit()
 
 from preprocess_data import process_data
 

@@ -6,3 +6,15 @@ share/
 etc/
 *.pyc
 pyvenv.cfg
+
+serviceAccountKey.json
+.env
+
+Lib/
+Scripts/
+Include/
+__pycache__/
+*.pyc
+*.pyd
+
+project.zip

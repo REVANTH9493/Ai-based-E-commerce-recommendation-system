@@ -4,7 +4,11 @@
 import pandas as pd
 from preprocess_data import process_data
 
-raw_data = pd.read_csv("clean_data.csv")
+from firebase_utils import get_data_from_firebase
+raw_data = get_data_from_firebase()
+if raw_data is None:
+    print("Failed to load data")
+    exit()
 data = process_data(raw_data)
 
 from content_based_filtering import content_based_recommendation
@@ -59,7 +63,12 @@ def evaluate_content_based_metrics(data, item_name, top_n=10):
 
 # Your main block:
 if __name__ == "__main__":
-    raw_data = pd.read_csv("clean_data.csv")
+    from firebase_utils import get_data_from_firebase
+    # raw_data = pd.read_csv("clean_data.csv")
+    raw_data = get_data_from_firebase()
+    if raw_data is None:
+        print("Failed to load data")
+        exit()
     data = process_data(raw_data)
     
     item_name = data['Name'].iloc[0]  # Guaranteed to exist

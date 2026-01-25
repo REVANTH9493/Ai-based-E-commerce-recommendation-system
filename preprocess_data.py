@@ -2,7 +2,6 @@
 import pandas as pd
 import numpy as np
 
-data = pd.read_csv("clean_data.csv")
 
 
 def process_data(data: pd.DataFrame) -> pd.DataFrame:
