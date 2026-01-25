@@ -14,20 +14,6 @@ st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout
 if "payment_done" not in st.session_state:
     st.session_state["payment_done"] = False
 
-if "payment_done" not in st.session_state:
-    st.session_state["payment_done"] = False
-
-if "cart_items" not in st.session_state:
-    st.session_state["cart_items"] = []
-
-if st.query_params.get("payment") == "success":
-    st.session_state["payment_done"] = True
-    st.session_state["cart_items"] = []
-    st.session_state["show_payment"] = False
-    st.session_state["show_cart"] = False
-    st.session_state["active_section"] = "Orders"
-    st.query_params.clear()
-
 # Check for category query param to trigger search
 if 'search_input' not in st.session_state:
     st.session_state['search_input'] = ""
