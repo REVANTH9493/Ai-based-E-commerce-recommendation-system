@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import random
 import streamlit.components.v1 as components
+from chatbot import render_chatbot_ui
 from preprocess_data import process_data
 from rating_based_recommendation import get_top_rated_items
 from content_based_filtering import content_based_recommendation
@@ -10,6 +11,9 @@ from collaborative_based_filtering import collaborative_filtering_recommendation
 from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
+if "payment_done" not in st.session_state:
+    st.session_state["payment_done"] = False
+
 if "payment_done" not in st.session_state:
     st.session_state["payment_done"] = False
 
@@ -23,6 +27,10 @@ if st.query_params.get("payment") == "success":
     st.session_state["show_cart"] = False
     st.session_state["active_section"] = "Orders"
     st.query_params.clear()
+
+# Check for category query param to trigger search
+if 'search_input' not in st.session_state:
+    st.session_state['search_input'] = ""
 
 url_category = st.query_params.get("category")
 if url_category:
@@ -452,6 +460,12 @@ def view_cart():
         st.markdown("")
         if st.button("Proceed to Checkout 💳", use_container_width=True):
             st.session_state["show_payment"] = True
+            if st.button("Proceed to Checkout 💳", use_container_width=True):
+                st.session_state["show_payment"] = True
+                st.session_state["show_cart"] = False
+                st.rerun()
+
+
 def show_payment():
     st.markdown("<div class='section-header'>💳 Payment</div>", unsafe_allow_html=True)
 
@@ -737,9 +751,20 @@ def login_page(data):
 
 
 def main():
+    
     data = load_and_process_data()
     if data is None:
         return
+    
+    # Determine visibility (Only on Home)
+    active_section = st.session_state.get('active_section', 'Home')
+    # Default is Home if not set. But if user is searching (search_active), it's technically still "Home" view usually
+    # unless we treat Search as separate. The prompt says "Home screen".
+    # Typically Search, Home, Filtered are all the same "Shop" page.
+    # Cart, Profile, Orders, Wishlist are different.
+    is_home_screen = active_section == 'Home'
+    
+    # render_chatbot_ui(data, visible=is_home_screen)  <-- Moved to end of main
 
     # Authentication Check & Session Restoration
     if 'logged_in' not in st.session_state:
@@ -1166,6 +1191,10 @@ def main():
                  except Exception as e:
                      pass
     st.markdown("---")
+    
+    # Render Chatbot LAST to ensure it overlays on top of everything
+    render_chatbot_ui(data, visible=is_home_screen)
+    
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
     main()

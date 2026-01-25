@@ -1,7 +1,10 @@
-streamlit==1.39.0
+streamlit==1.53.1
 pandas==2.3.3
 numpy
 scikit-learn==1.8.0
-scipy
-altair==5.5.0
-rich==13.9.4
+scipy==1.17.0
+altair==6.0.0
+rich==14.2.0
+
+google-generativeai
+python-dotenv
