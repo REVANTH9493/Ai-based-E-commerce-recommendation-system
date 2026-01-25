@@ -456,10 +456,11 @@ def view_cart():
             """, unsafe_allow_html=True
         )
         st.markdown("")
-        if st.button("Proceed to Checkout 💳", use_container_width=True):
-            st.session_state["show_payment"] = True
-            st.session_state["show_cart"] = False
-            st.rerun()
+            if st.button("Proceed to Checkout 💳", use_container_width=True):
+                st.session_state["show_payment"] = True
+                st.session_state["show_cart"] = False
+                st.rerun()
+
 
 def show_payment():
     st.markdown("<div class='section-header'>💳 Payment</div>", unsafe_allow_html=True)
