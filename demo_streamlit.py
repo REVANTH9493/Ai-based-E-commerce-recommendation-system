@@ -12,7 +12,6 @@ from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
 
-# Check for category query param to trigger search
 if 'search_input' not in st.session_state:
     st.session_state['search_input'] = ""
 
