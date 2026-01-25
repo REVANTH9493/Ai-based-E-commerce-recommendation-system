@@ -788,13 +788,17 @@ def main():
         except:
              pass
 
+    # --- Sidebar Chatbot ---
+    with st.sidebar:
+        render_chatbot_ui(data)
+    
     # --- Title & Search Header ---
     h_col1, h_col2 = st.columns([3, 1]) # Ratio to give Title more space, Search approx 300px logic
     with h_col1:
         st.markdown('<h1 class="title-text" style="text-align: left; margin-bottom: 5px;">AI-Based E-commerce Recommendation System</h1>', unsafe_allow_html=True)
     with h_col2:
         # Align search bar to match title visual baseline
-        st.markdown('<style>div[data-testid="stTextInput"] { width: 300px; margin-left: auto; margin-top: 20px; }</style>', unsafe_allow_html=True)
+        st.markdown('<style>div[data-testid="stTextInput"] { width: 240px; margin-left: 3px; margin-top: 20px; }</style>', unsafe_allow_html=True)
         # Spacer removed for better alignment
         if 'search_input' not in st.session_state:
             st.session_state['search_input'] = ""
@@ -1142,10 +1146,6 @@ def main():
                           st.info("Deals are updating...")
                  except Exception as e:
                      pass
-    st.markdown("---")
-    
-    # Render Chatbot LAST to ensure it overlays on top of everything
-    render_chatbot_ui(data, visible=is_home_screen)
     
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
