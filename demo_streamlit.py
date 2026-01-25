@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import random
 import streamlit.components.v1 as components
-from chatbot import render_chatbot_ui
 from preprocess_data import process_data
 from rating_based_recommendation import get_top_rated_items
 from content_based_filtering import content_based_recommendation
@@ -12,7 +11,19 @@ from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
 
-# render_chatbot_ui(data)
+if "payment_done" not in st.session_state:
+    st.session_state["payment_done"] = False
+
+if "cart_items" not in st.session_state:
+    st.session_state["cart_items"] = []
+
+if st.query_params.get("payment") == "success":
+    st.session_state["payment_done"] = True
+    st.session_state["cart_items"] = []
+    st.session_state["show_payment"] = False
+    st.session_state["show_cart"] = False
+    st.session_state["active_section"] = "Orders"
+    st.query_params.clear()
 
 # Check for category query param to trigger search
 if 'search_input' not in st.session_state:
@@ -303,24 +314,16 @@ def clear_query_params():
     st.query_params.clear()
     if current_uid:
         st.query_params["user_id"] = current_uid
-from firebase_utils import get_data_from_firebase
-
 @st.cache_data
 def load_and_process_data():
-    """Loads and processes the dataset from Firebase Realtime Database."""
+    """Loads and processes the dataset once."""
     try:
-        # Load from Firebase instead of local CSV
-        raw_data = get_data_from_firebase()
-        
-        if raw_data is None or raw_data.empty:
-            st.error("Failed to load data from Firebase.")
-            return None
-            
+        raw_data = pd.read_csv("clean_data.csv")
         data = process_data(raw_data)
         
         # Ensure ProdID is consistent (int)
         if 'ProdID' in data.columns:
-            # First coerce to numeric to handle empty strings or 'nan'
+            data = data.dropna(subset=['ProdID'])
             data['ProdID'] = pd.to_numeric(data['ProdID'], errors='coerce')
             data = data.dropna(subset=['ProdID'])
             data['ProdID'] = data['ProdID'].astype(int)
@@ -328,25 +331,12 @@ def load_and_process_data():
         if 'ImageURL' in data.columns:
             data['ImageURL'] = data['ImageURL'].astype(str)
         return data
+    except FileNotFoundError:
+        st.error("Error: 'clean_data.csv' not found.")
+        return None
     except Exception as e:
         st.error(f"Error processing data: {e}")
         return None
-
-def reset_to_home():
-    """Callback to reset app to Home state, clearing search."""
-    st.session_state['selected_product'] = None
-    st.session_state['search_input'] = ""
-    # We can modify this here safely because the widget hasn't rendered yet in the NEXT run
-    if 'search_widget_header' in st.session_state:
-        st.session_state['search_widget_header'] = ""
-    st.session_state['active_section'] = 'Home'
-    st.session_state['show_cart'] = False
-    
-    # Clear query params
-    if hasattr(st, 'query_params'):
-        st.query_params.clear()
-    elif hasattr(st, 'experimental_set_query_params'):
-        st.experimental_set_query_params()
 def get_smart_placeholder(name, prod_id):
     """Returns a high-quality placeholder image based on product keywords."""
     name_lower = str(name).lower()
@@ -466,11 +456,58 @@ def view_cart():
         )
         st.markdown("")
         if st.button("Proceed to Checkout 💳", use_container_width=True):
-            st.balloons()
-            st.toast("Order Placed Successfully! 🎉")
-            st.session_state['cart_items'] = []
-            st.session_state['show_cart'] = False
+            st.session_state["show_payment"] = True
+            st.session_state["show_cart"] = False
             st.rerun()
+
+
+def show_payment():
+    st.markdown("<div class='section-header'>💳 Payment</div>", unsafe_allow_html=True)
+
+    cart_items = st.session_state.get("cart_items", [])
+    if not cart_items:
+        st.warning("Cart is empty.")
+        return
+
+    # Demo total calculation
+    total_amount = len(cart_items) * 499  # demo price
+    st.subheader(f"Amount to Pay: ₹{total_amount}")
+
+    components.html(f"""
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <button id="rzp-button"
+    style="
+    padding:14px 28px;
+    background:#0d6efd;
+    color:white;
+    border:none;
+    border-radius:6px;
+    font-size:16px;
+    cursor:pointer;">
+    Pay with Razorpay (Test)
+    </button>
+
+    <script>
+    var options = {{
+        "key": "rzp_test_S80byHh8aVKzjq",
+        "amount": "{total_amount * 100}",
+        "currency": "INR",
+        "name": "AI E-Commerce Demo",
+        "description": "Test Payment",
+        "handler": function (response) {{
+            alert("Payment Successful!\\nPayment ID: " + response.razorpay_payment_id);
+            window.location.search = "?payment=success";
+        }}
+    }};
+    var rzp = new Razorpay(options);
+    document.getElementById("rzp-button").onclick = function(e) {{
+        rzp.open();
+        e.preventDefault();
+    }};
+    </script>
+    """, height=700)
+
 def view_product_details(product_row, data):
     """Renders the detailed view of a selected product."""
     components.html("""
@@ -742,6 +779,9 @@ def main():
     if not st.session_state['logged_in']:
         login_page(data)
         return
+    if st.session_state.get("payment_done"):
+        st.success("🎉 Payment successful! Your order has been placed.")
+        st.session_state["payment_done"] = False
 
     if 'Price' not in data.columns:
         np.random.seed(42)                                       
@@ -806,13 +846,13 @@ def main():
     
     nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
     with nav_col1:
-     with nav_col1:
-          if st.button("🏠 Home", use_container_width=True, on_click=reset_to_home):
-              # Logic is handled in callback. Only things that need to happen AFTER rerun (if any) go here.
-              # But with st.rerun() called in main usually, we might just let it auto-rerun.
-              # Actually, on_click runs BEFORE the script reruns, so we don't need st.rerun() here necessarily if button click triggers rerun.
-              # But explicit rerun is safer if we want immediate update.
-              pass
+         if st.button("🏠 Home", use_container_width=True):
+             set_selected_product(None)
+             st.session_state['search_input'] = ""
+             st.session_state['active_section'] = 'Home'
+             st.session_state['show_cart'] = False # Ensure we exit cart view
+             clear_query_params()
+             st.rerun()
     with nav_col2:
          if st.button("❤️ Wishlist", use_container_width=True):
              set_selected_product(None)
@@ -878,11 +918,7 @@ def main():
                  all_brands = sorted(data['Brand'].dropna().unique().tolist())
                  selected_brands = st.multiselect("Brand", all_brands)
             with f_col3:
-                 if search_active:
-                      min_rating = 0.0 # Disable rating filter during search
-                      st.write(" ")
-                 else:
-                      min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
+                 min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
 
     if selected_brands:
         filtered_data = filtered_data[filtered_data['Brand'].isin(selected_brands)]
@@ -901,7 +937,9 @@ def main():
     else:
         # Removed search bar from here as it is moved to header
         pass
-        if st.session_state.get('show_cart', False):
+        if st.session_state.get("show_payment", False):
+             show_payment()
+        elif st.session_state.get('show_cart', False):
              view_cart()
         elif st.session_state.get("active_section") == "Orders":
              st.markdown(f"<div class='section-header'>📦 Your Orders (User ID: {target_user_id})</div>", unsafe_allow_html=True)
@@ -1145,7 +1183,7 @@ def main():
     st.markdown("---")
     
     # Render Chatbot LAST to ensure it overlays on top of everything
-    render_chatbot_ui(data, visible=is_home_screen)
+
     
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
