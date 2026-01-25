@@ -26,10 +26,16 @@ def content_based_recommendation(data, item_name, top_n=10):
 # TO test the system
 if __name__ == "__main__":
     import pandas as pd
+    from firebase_utils import get_data_from_firebase
     from preprocess_data import process_data
 
-    raw_data = pd.read_csv("clean_data.csv")
-    data = process_data(raw_data)
+    # raw_data = pd.read_csv("clean_data.csv")
+    raw_data = get_data_from_firebase()
+    if raw_data is not None:
+        data = process_data(raw_data)
+    else:
+        print("Failed to load data from Firebase")
+        exit()
     item_name = "OPI Infinite Shine, Nail Lacquer Nail Polish, Bubble Bath"
     result = content_based_recommendation(data, item_name, top_n=5)
     print(result)

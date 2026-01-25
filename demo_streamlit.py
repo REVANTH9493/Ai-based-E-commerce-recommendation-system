@@ -303,16 +303,24 @@ def clear_query_params():
     st.query_params.clear()
     if current_uid:
         st.query_params["user_id"] = current_uid
+from firebase_utils import get_data_from_firebase
+
 @st.cache_data
 def load_and_process_data():
-    """Loads and processes the dataset once."""
+    """Loads and processes the dataset from Firebase Realtime Database."""
     try:
-        raw_data = pd.read_csv("clean_data.csv")
+        # Load from Firebase instead of local CSV
+        raw_data = get_data_from_firebase()
+        
+        if raw_data is None or raw_data.empty:
+            st.error("Failed to load data from Firebase.")
+            return None
+            
         data = process_data(raw_data)
         
         # Ensure ProdID is consistent (int)
         if 'ProdID' in data.columns:
-            data = data.dropna(subset=['ProdID'])
+            # First coerce to numeric to handle empty strings or 'nan'
             data['ProdID'] = pd.to_numeric(data['ProdID'], errors='coerce')
             data = data.dropna(subset=['ProdID'])
             data['ProdID'] = data['ProdID'].astype(int)
@@ -320,12 +328,25 @@ def load_and_process_data():
         if 'ImageURL' in data.columns:
             data['ImageURL'] = data['ImageURL'].astype(str)
         return data
-    except FileNotFoundError:
-        st.error("Error: 'clean_data.csv' not found.")
-        return None
     except Exception as e:
         st.error(f"Error processing data: {e}")
         return None
+
+def reset_to_home():
+    """Callback to reset app to Home state, clearing search."""
+    st.session_state['selected_product'] = None
+    st.session_state['search_input'] = ""
+    # We can modify this here safely because the widget hasn't rendered yet in the NEXT run
+    if 'search_widget_header' in st.session_state:
+        st.session_state['search_widget_header'] = ""
+    st.session_state['active_section'] = 'Home'
+    st.session_state['show_cart'] = False
+    
+    # Clear query params
+    if hasattr(st, 'query_params'):
+        st.query_params.clear()
+    elif hasattr(st, 'experimental_set_query_params'):
+        st.experimental_set_query_params()
 def get_smart_placeholder(name, prod_id):
     """Returns a high-quality placeholder image based on product keywords."""
     name_lower = str(name).lower()
@@ -785,13 +806,13 @@ def main():
     
     nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
     with nav_col1:
-         if st.button("🏠 Home", use_container_width=True):
-             set_selected_product(None)
-             st.session_state['search_input'] = ""
-             st.session_state['active_section'] = 'Home'
-             st.session_state['show_cart'] = False # Ensure we exit cart view
-             clear_query_params()
-             st.rerun()
+     with nav_col1:
+          if st.button("🏠 Home", use_container_width=True, on_click=reset_to_home):
+              # Logic is handled in callback. Only things that need to happen AFTER rerun (if any) go here.
+              # But with st.rerun() called in main usually, we might just let it auto-rerun.
+              # Actually, on_click runs BEFORE the script reruns, so we don't need st.rerun() here necessarily if button click triggers rerun.
+              # But explicit rerun is safer if we want immediate update.
+              pass
     with nav_col2:
          if st.button("❤️ Wishlist", use_container_width=True):
              set_selected_product(None)
@@ -857,7 +878,11 @@ def main():
                  all_brands = sorted(data['Brand'].dropna().unique().tolist())
                  selected_brands = st.multiselect("Brand", all_brands)
             with f_col3:
-                 min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
+                 if search_active:
+                      min_rating = 0.0 # Disable rating filter during search
+                      st.write(" ")
+                 else:
+                      min_rating = st.slider("Min Rating", 0.0, 5.0, 3.0, 0.5)
 
     if selected_brands:
         filtered_data = filtered_data[filtered_data['Brand'].isin(selected_brands)]

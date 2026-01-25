@@ -9,7 +9,12 @@ from collaborative_based_filtering import collaborative_filtering_recommendation
 from hybrid_approach import hybrid_recommendation_filtering
 
 # Load raw data
-raw_data = pd.read_csv("clean_data.csv")
+# Load raw data
+from firebase_utils import get_data_from_firebase
+raw_data = get_data_from_firebase()
+if raw_data is None:
+    print("Failed to load data")
+    exit()
 
 # Process data
 data = process_data(raw_data)

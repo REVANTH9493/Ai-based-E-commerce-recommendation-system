@@ -38,7 +38,9 @@ def item_based_collaborative_filtering(data, product_id, top_n=5):
 if __name__ == "__main__":
     # Test
     try:
-        raw_data = pd.read_csv("clean_data.csv")
+        from firebase_utils import get_data_from_firebase
+        raw_data = get_data_from_firebase()
+        # raw_data = pd.read_csv("clean_data.csv")
         # Ensure we have ProdID in data if it wasn't there originally or created in process_data
         # Assuming process_data or raw data has 'ProdID' based on previous context. 
         # If not, we might need to rely on 'Name' or create IDs.

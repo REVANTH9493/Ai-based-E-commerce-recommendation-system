@@ -8,7 +8,14 @@ def get_top_rated_items(data:pd.DataFrame, top_n: int=10) -> pd.DataFrame:
 
 if __name__ == "__main__":
         import pandas as pd
+        from firebase_utils import get_data_from_firebase
         from preprocess_data import process_data
-        raw_data = pd.read_csv("clean_data.csv")
-        data = process_data(raw_data)
+        
+        # raw_data = pd.read_csv("clean_data.csv")
+        raw_data = get_data_from_firebase()
+        if raw_data is not None:
+             data = process_data(raw_data)
+        else:
+             print("Failed to load data")
+             exit()
         print(get_top_rated_items(data))
