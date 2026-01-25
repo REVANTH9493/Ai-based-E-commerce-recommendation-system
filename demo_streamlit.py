@@ -1,16 +1,3 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import random
-import streamlit.components.v1 as components
-from chatbot import render_chatbot_ui
-from preprocess_data import process_data
-from rating_based_recommendation import get_top_rated_items
-from content_based_filtering import content_based_recommendation
-from collaborative_based_filtering import collaborative_filtering_recommendations
-from hybrid_approach import hybrid_recommendation_filtering
-from item_based_collaborative_filtering import item_based_collaborative_filtering
-st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
 
 # render_chatbot_ui(data)
 
