@@ -11,6 +11,8 @@ from collaborative_based_filtering import collaborative_filtering_recommendation
 from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
+if "payment_done" not in st.session_state:
+    st.session_state["payment_done"] = False
 
 if "payment_done" not in st.session_state:
     st.session_state["payment_done"] = False
@@ -456,6 +458,8 @@ def view_cart():
             """, unsafe_allow_html=True
         )
         st.markdown("")
+        if st.button("Proceed to Checkout 💳", use_container_width=True):
+            st.session_state["show_payment"] = True
             if st.button("Proceed to Checkout 💳", use_container_width=True):
                 st.session_state["show_payment"] = True
                 st.session_state["show_cart"] = False
@@ -508,6 +512,7 @@ def show_payment():
     }};
     </script>
     """, height=700)
+
 
 def view_product_details(product_row, data):
     """Renders the detailed view of a selected product."""
@@ -852,6 +857,7 @@ def main():
              st.session_state['search_input'] = ""
              st.session_state['active_section'] = 'Home'
              st.session_state['show_cart'] = False # Ensure we exit cart view
+             st.session_state['show_payment'] = False 
              clear_query_params()
              st.rerun()
     with nav_col2:
@@ -859,6 +865,7 @@ def main():
              set_selected_product(None)
              st.session_state['active_section'] = 'Wishlist'
              st.session_state['show_cart'] = False 
+             st.session_state['show_payment'] = False
              st.rerun()
     with nav_col3:
          if st.button("📦 Orders", use_container_width=True):
@@ -874,12 +881,14 @@ def main():
              set_selected_product(None)
              st.session_state['active_section'] = 'Cart' # Explicit state for clarity
              st.session_state['show_cart'] = True
+             st.session_state['show_payment'] = False
              st.rerun()
     with nav_col5:
          if st.button("👤 Profile", key="profile_header", use_container_width=True):
              set_selected_product(None)
              st.session_state['active_section'] = 'Profile'
-             st.session_state['show_cart'] = False 
+             st.session_state['show_cart'] = False
+             st.session_state['show_payment'] = False
              st.rerun()
 
     st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
