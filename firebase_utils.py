@@ -9,14 +9,25 @@ import os
 # Singleton pattern for Firebase app to avoid "App already exists" errors in Streamlit
 if not firebase_admin._apps:
     try:
-        # Check if key exists
-        if os.path.exists('serviceAccountKey.json'):
+        # Check for secrets first (Cloud/secure deployment)
+        if "firebase" in st.secrets:
+            # Streamlit secrets usually behave like a dict or can be converted to one
+            service_account_info = dict(st.secrets["firebase"])
+            
+            # Initialize with secrets
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': 'https://ai-based-recommendation-55bcb-default-rtdb.asia-southeast1.firebasedatabase.app/'
+            })
+        
+        # Fallback to local file
+        elif os.path.exists('serviceAccountKey.json'):
             cred = credentials.Certificate('serviceAccountKey.json')
             firebase_admin.initialize_app(cred, {
                 'databaseURL': 'https://ai-based-recommendation-55bcb-default-rtdb.asia-southeast1.firebasedatabase.app/'
             })
         else:
-            st.error("serviceAccountKey.json not found in the root directory.")
+            st.error("Firebase credentials not found (checked secrets and serviceAccountKey.json).")
     except Exception as e:
         st.error(f"Failed to initialize Firebase: {e}")
 
