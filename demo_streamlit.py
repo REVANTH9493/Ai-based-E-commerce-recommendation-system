@@ -457,11 +457,10 @@ def view_cart():
         )
         st.markdown("")
         if st.button("Proceed to Checkout 💳", use_container_width=True):
-            st.balloons()
-            st.toast("Order Placed Successfully! 🎉")
-            st.session_state['cart_items'] = []
-            st.session_state['show_cart'] = False
+            st.session_state["show_payment"] = True
+            st.session_state["show_cart"] = False
             st.rerun()
+
 def show_payment():
     st.markdown("<div class='section-header'>💳 Payment</div>", unsafe_allow_html=True)
 
