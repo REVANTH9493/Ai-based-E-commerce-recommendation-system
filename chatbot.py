@@ -135,293 +135,90 @@ Respond in MAX 50 words. ONLY discuss shopping/products. If off-topic, redirect 
 
 
 def render_chatbot_ui(data, visible=True):
-    """Render chatbot UI with floating button."""
+    """Render chatbot UI embedded in sidebar."""
     if not visible:
         return
 
-    if 'chatbot_open' not in st.session_state:
-        st.session_state.chatbot_open = False
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
     if 'chatbot_instance' not in st.session_state:
         st.session_state.chatbot_instance = None
-    if 'chat_input_val' not in st.session_state:
-        st.session_state.chat_input_val = ""
     
-    # CSS for fixed popup
-    st.markdown("""
-    <style>
-    /* Trigger Button Styling */
-    .chat-trigger-btn {
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        z-index: 1000;
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    
-    /* Main Chat Container Styling */
-    div[data-testid="stVerticalBlock"]:has(div.chatbot-marker) {
-        position: fixed;
-        bottom: 80px;
-        right: 30px;
-        width: 380px;
-        height: 500px; /* Increased slightly for better proportions */
-        max-height: 80vh;
-        background-color: white;
-        border-radius: 12px;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.15);
-        z-index: 1001;
-        overflow: hidden;
-        border: 1px solid #eee;
-        padding: 0 !important;
-        display: flex;
-        flex-direction: column;
-        gap: 0 !important; /* Force remove gaps */
-    }
-    
-    /* Remove default Streamlit padding inside the popup container */
-    div[data-testid="stVerticalBlock"]:has(div.chatbot-marker) > div {
-        width: 100%;
-    }
-    div[data-testid="stVerticalBlock"]:has(div.chatbot-marker) > div[data-testid="element-container"] {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    
-    /* Chat Header */
-    .chat-header-container {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 15px 20px;
-        font-weight: 600;
-        font-size: 16px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid #eee;
-    }
-    
-    /* Close Button in Header */
-    .close-btn {
-        cursor: pointer;
-        color: white; 
-        font-weight: bold;
-        opacity: 0.8;
-    }
-    .close-btn:hover { opacity: 1; }
-
-    /* Messages Area */
-    .chat-messages {
-        flex-grow: 1;
-        overflow-y: auto;
-        padding: 15px;
-        background-color: #f8f9fa;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .message {
-        display: flex;
-        flex-direction: column;
-        max-width: 85%;
-    }
-    
-    .user-message {
-        align-self: flex-end;
-        align-items: flex-end;
-    }
-    
-    .bot-message {
-        align-self: flex-start;
-        align-items: flex-start;
-    }
-    
-    .message-bubble {
-        padding: 10px 14px;
-        border-radius: 16px;
-        font-size: 14px;
-        line-height: 1.4;
-        box-shadow: none !important;
-    }
-    
-    .user-message .message-bubble {
-        background: #667eea;
-        color: white;
-        border-bottom-right-radius: 4px;
-    }
-    
-    .bot-message .message-bubble {
-        background: white;
-        color: #333;
-        border-bottom-left-radius: 4px;
-        border: 1px solid #f0f0f0;
-    }
-    
-    /* Hide default Streamlit elements that add spacing */
-    div[data-testid="stVerticalBlock"]:has(div.chatbot-marker) iframe,
-    div[data-testid="stVerticalBlock"]:has(div.chatbot-marker) .stMarkdown {
-       margin-bottom: 0 !important;
-    }
-    
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Render Trigger Button
-    st.markdown("""
-    <style>
-    .stButton button[kind="primary"] {
-        position: fixed !important;
-        bottom: 30px !important;
-        right: 30px !important;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border-radius: 50% !important;
-        width: 60px !important;
-        height: 60px !important;
-        font-size: 24px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
-        z-index: 1000 !important;
-        border: none !important;
-        padding: 0 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    if not st.session_state.chatbot_open:
-        if st.button("💬", key="chat_toggle", help="Open Shopping Assistant", type="primary"):
-            st.session_state.chatbot_open = True
-            st.rerun()
-    
-    else: 
-        # Chat Window
-        with st.container():
-            # Marker for CSS targeting - NOW INSIDE THE CONTAINER
-            st.markdown('<div class="chatbot-marker"></div>', unsafe_allow_html=True)
-            
-            # Initialize Bot logic if needed
-            if st.session_state.chatbot_instance is None:
+    # Initialize Bot logic if needed
+    if st.session_state.chatbot_instance is None:
+        try:
+            # Try getting key from secrets first
+            api_key = None
+            if "GOOGLE_API_KEY" in st.secrets:
+                api_key = st.secrets["GOOGLE_API_KEY"]
+            else:
                 api_key = os.getenv("GOOGLE_API_KEY")
-                if not api_key:
-                    st.error("Missing API Key")
-                else:
-                    try:
-                        st.session_state.chatbot_instance = EcommerceChatbot(api_key, data)
-                        st.session_state.chatbot_instance.start_chat()
-                        if not st.session_state.chat_history:
-                            st.session_state.chat_history.append({
-                                "role": "bot", 
-                                "message": "Hi! 👋 available to help you shop!"
-                            })
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                
+            if not api_key:
+                st.error("Missing Google API Key")
+            else:
+                st.session_state.chatbot_instance = EcommerceChatbot(api_key, data)
+                st.session_state.chatbot_instance.start_chat()
+                if not st.session_state.chat_history:
+                    st.session_state.chat_history.append({
+                        "role": "bot", 
+                        "message": "Hi! 👋 available to help you shop!"
+                    })
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-            # --- Custom HTML Header to avoid Streamlit Column Spacing ---
-            # using st.columns usually adds gaps. We can try a pure HTML header row 
-            # OR just styling the columns very tight. Let's stick to columns but remove their gaps via CSS above.
-            
-            # Header Row
-            h1, h2 = st.columns([0.85, 0.15])
-            with h1:
-                st.markdown('<div style="font-weight: 600; color: #667eea; font-size: 25px; padding: 5px 0 0 15px;">🛍️ Assistant</div>', unsafe_allow_html=True)
-            with h2:
-                if st.button("✕", key="close_chat_btn"):
-                    st.session_state.chatbot_open = False
-                    st.rerun()
-            
-            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True) # Spacer instead of HR
-
-            # --- Messages ---
-            # Using a fixed height container for scroll
-            messages_container = st.container(height=350) 
-            with messages_container:
-                for msg in st.session_state.chat_history:
-                    if msg["role"] == "user":
-                        st.markdown(
-                            f'<div class="message user-message">'
-                            f'<div class="message-bubble">{msg["message"]}</div>'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        st.markdown(
-                            f'<div class="message bot-message">'
-                            f'<div class="message-bubble">{msg["message"]}</div>'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
-            
-            # --- Input Area ---
-            # Using a container with background color to anchor it at bottom visually
-            with st.container():
-                st.markdown('<div class="input-container" style="padding: 10px; background-color: white; border-top: 1px solid #eee;">', unsafe_allow_html=True)
-                
-                with st.form(key="chat_input_form", clear_on_submit=True, border=False):
-                    ic1, ic2 = st.columns([0.85, 0.15])
-                    
-                    with ic1:
-                        st.text_input("Ask...", key="chat_form_input", placeholder="Type message...", label_visibility="collapsed")
-                    
-                    with ic2:
-                        st.markdown("""
-                        <style>
-                        /* Style for the form submit button */
-                        div[data-testid="stForm"] button {
-                            padding: 0rem !important;
-                            width: 38px !important;
-                            height: 38px !important;
-                            border-radius: 50% !important;
-                            margin-top: 0px !important;
-                            background-color: #667eea;
-                            color: white;
-                            border: none;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                        }
-                        div[data-testid="stForm"] button:hover {
-                            background-color: #764ba2;
-                            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                        }
-                        /* Remove default input styling to make it flush */
-                        div[data-testid="stTextInput"] input {
-                            padding: 0.5rem 1rem !important;
-                            min-height: 2.5rem !important;
-                            height: 2.5rem !important;
-                            font-size: 14px !important;
-                            border-radius: 20px !important;
-                            border: 1px solid #eee !important;
-                            background: #f9f9f9 !important;
-                        }
-                        div[data-testid="stTextInput"] div[data-testid="input_container"] {
-                            min-height: 2.5rem !important;
-                            border: none !important;
-                            background: transparent !important;
-                        }
-                        
-                        /* Remove form gap */
-                        div[data-testid="stForm"] {
-                            gap: 0px !important;
-                        }
-                        </style>
-                        """, unsafe_allow_html=True)
-                        submitted = st.form_submit_button("➤", help="Send")
-                
-                if submitted:
-                    val = st.session_state.get("chat_form_input")
-                    if val:
-                        st.session_state.chat_history.append({"role": "user", "message": val})
-                        # Response logic
-                        if st.session_state.chatbot_instance:
-                            try:
-                                resp = st.session_state.chatbot_instance.send_message(val)
-                                st.session_state.chat_history.append({"role": "bot", "message": resp})
-                            except Exception as e:
-                                st.session_state.chat_history.append({"role": "bot", "message": "Verify API Key."})
-                        st.rerun()
-                
-                st.markdown('</div>', unsafe_allow_html=True)
+    # --- Chat Interface (No Floating CSS) ---
+    
+    # Scoped CSS for Sidebar Inputs
+    st.markdown("""
+        <style>
+            /* Remove default input styling to make it flush */
+            section[data-testid="stSidebar"] div[data-testid="stTextInput"] input {
+                padding: 0.5rem 1rem !important;
+                min-height: 2.5rem !important;
+                height: 2.5rem !important;
+                font-size: 14px !important;
+                border-radius: 20px !important;
+                border: 1px solid #eee !important;
+                background: #f9f9f9 !important;
+            }
+            section[data-testid="stSidebar"] div[data-testid="stTextInput"] div[data-testid="input_container"] {
+                min-height: 2.5rem !important;
+                border: none !important;
+                background: transparent !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### 🤖 Shopping Assistant")
+    
+    # Simple container for messages
+    messages_container = st.container(height=500) 
+    with messages_container:
+        for msg in st.session_state.chat_history:
+            if msg["role"] == "user":
+                st.markdown(
+                    f'<div style="background-color: #e0f7fa; padding: 10px; border-radius: 10px; margin-bottom: 5px; text-align: right; color: #333;">{msg["message"]}</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f'<div style="background-color: #f1f3f4; padding: 10px; border-radius: 10px; margin-bottom: 5px; text-align: left; color: #333;">{msg["message"]}</div>',
+                    unsafe_allow_html=True
+                )
+    
+    # Input
+    with st.form(key="sidebar_chat_form", clear_on_submit=True, border=False):
+        user_input = st.text_input("Ask about products...", placeholder="Shampoo for dry hair...", label_visibility="collapsed")
+        submitted = st.form_submit_button("Send", use_container_width=True)
+    
+    if submitted and user_input:
+        st.session_state.chat_history.append({"role": "user", "message": user_input})
+        
+        if st.session_state.chatbot_instance:
+            try:
+                resp = st.session_state.chatbot_instance.send_message(user_input)
+                st.session_state.chat_history.append({"role": "bot", "message": resp})
+            except Exception as e:
+                st.session_state.chat_history.append({"role": "bot", "message": "Error connecting to AI."})
+        st.rerun()

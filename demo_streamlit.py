@@ -62,7 +62,7 @@ st.markdown("""
     .product-img {
         height: 200px;
         width: 100%;
-        object-fit: contain;
+        object-fit: cover;
         margin-bottom: 10px;
         border-radius: 4px;
         transition: transform 0.3s ease;
@@ -74,7 +74,7 @@ st.markdown("""
     .detail-img {
         height: 400px;
         width: 100%;
-        object-fit: contain;
+        object-fit: cover;
         border-radius: 8px;
         border: 1px solid #eee;
     }
@@ -101,8 +101,8 @@ st.markdown("""
     .section-header {
         font-size: 24px;
         font-weight: bold;
-        margin-top: 5px;
-        margin-bottom: 5px;
+        margin-top: 15px;
+        margin-bottom: 15px;
         border-bottom: 2px solid #f0f0f0;
         padding-bottom: 5px;
     }
@@ -113,7 +113,7 @@ st.markdown("""
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800 !important;
-        padding-top: 20px;
+        padding-top: 0px;
         margin-bottom: 0px;
         line-height: 1.2;
     }
@@ -516,7 +516,7 @@ def view_product_details(product_row, data):
         set_selected_product(None)
         clear_query_params()
     st.button("← Back to Shopping", on_click=go_back)
-    st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
+    st.markdown('<hr style="margin-top: 15px; margin-bottom: 15px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
     col1, col2 = st.columns([1, 1])
     with col1:
         img_url = get_product_image_url(product_row)
@@ -533,7 +533,7 @@ def view_product_details(product_row, data):
         if st.button("Add to Cart", key="btn_detail_add"):
             st.session_state['cart_items'].append(product_row.to_dict())
             st.toast(f"Added {product_row.get('Name')[:20]}... to cart! 🛒 ({len(st.session_state['cart_items'])})")
-    st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
+    st.markdown('<hr style="margin-top: 15px; margin-bottom: 15px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
     st.markdown("<div class='section-header'>✨ Similar Items</div>", unsafe_allow_html=True)
     try:
         similar_items = content_based_recommendation(data, item_name=product_row['Name'], top_n=4)
@@ -845,7 +845,7 @@ def main():
              st.session_state['show_cart'] = False 
              st.rerun()
 
-    st.markdown('<hr style="margin-top: 5px; margin-bottom: 5px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
+    st.markdown('<hr style="margin-top: 15px; margin-bottom: 15px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
 
     # --- Profile Section in Main Area (if active) ---
     if st.session_state.get('active_section') == 'Profile':
