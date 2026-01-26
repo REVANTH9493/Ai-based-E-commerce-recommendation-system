@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import random
 import streamlit.components.v1 as components
+from chatbot import render_chatbot_ui
 from preprocess_data import process_data
 from rating_based_recommendation import get_top_rated_items
 from content_based_filtering import content_based_recommendation
@@ -71,9 +72,11 @@ st.markdown("""
         cursor: pointer;
     }
     .product-img {
+        display: block;
         height: 200px;
         width: 100%;
         object-fit: cover;
+        object-position: center;
         margin-bottom: 10px;
         border-radius: 4px;
         transition: transform 0.3s ease;
@@ -173,46 +176,51 @@ st.markdown("""
         right: 10px;
     }
     .cat-img {
-        height: 180px;
+        display: block;
+        height: 250px;
         width: 100%;
         object-fit: cover;
-        border-radius: 15px;
-        transition: filter 0.3s ease, transform 0.3s ease;
-        border: none;
-        box-shadow: none;
-        filter: blur(2px) brightness(0.7); /* Blur added as requested */
+        object-position: center;
+        border-radius: 12px;
+        transition: transform 0.3s ease, filter 0.3s ease;
+        filter: brightness(0.9);
     }
     .cat-container:hover .cat-img {
         transform: scale(1.03);
-        filter: blur(0px) brightness(0.6); /* Unblur on hover? Or keep blur? User said "background image should be slightly blurred". Let's keep it blurred but maybe less dark. */
+        filter: brightness(0.8);
     }
     .cat-label {
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        color: white; /* White text */
+        color: #004d99;
         font-weight: 800;
-        font-size: 24px;
+        font-size: 22px;
         text-transform: uppercase;
-        letter-spacing: 1.5px;
-        text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        text-decoration: underline;
         width: 100%;
         text-align: center;
-        margin-top: 0;
         pointer-events: none;
+        background: rgba(255, 255, 255, 0.4);
+        padding: 8px 0;
+        text-shadow: none;
     }
     .cat-container {
         position: relative;
         display: block;
-        width: 100%;       /* Fluid width for grid columns */
-        /* min-width: 300px; REMOVED to prevent overlap in grid */
-        /* flex: 0 0 auto;   REMOVED as not needed for grid */
-        border-radius: 15px;
+        width: 100%;
+        border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border: 2px solid #ccc;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         text-decoration: none;
-        margin-bottom: 0; /* No bottom margin needed in scroll row */
+        background-color: #fff;
+        transition: all 0.3s ease;
+    }
+    .cat-container:hover {
+        border-color: #004d99;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }
     /* Smart Badge Styling */
     .badge {
@@ -314,16 +322,24 @@ def clear_query_params():
     st.query_params.clear()
     if current_uid:
         st.query_params["user_id"] = current_uid
+from firebase_utils import get_data_from_firebase
+
 @st.cache_data
 def load_and_process_data():
-    """Loads and processes the dataset once."""
+    """Loads and processes the dataset from Firebase Realtime Database."""
     try:
-        raw_data = pd.read_csv("clean_data.csv")
+        # Load from Firebase instead of local CSV
+        raw_data = get_data_from_firebase()
+        
+        if raw_data is None or raw_data.empty:
+            st.error("Failed to load data from Firebase.")
+            return None
+            
         data = process_data(raw_data)
         
         # Ensure ProdID is consistent (int)
         if 'ProdID' in data.columns:
-            data = data.dropna(subset=['ProdID'])
+            # First coerce to numeric to handle empty strings or 'nan'
             data['ProdID'] = pd.to_numeric(data['ProdID'], errors='coerce')
             data = data.dropna(subset=['ProdID'])
             data['ProdID'] = data['ProdID'].astype(int)
@@ -331,9 +347,6 @@ def load_and_process_data():
         if 'ImageURL' in data.columns:
             data['ImageURL'] = data['ImageURL'].astype(str)
         return data
-    except FileNotFoundError:
-        st.error("Error: 'clean_data.csv' not found.")
-        return None
     except Exception as e:
         st.error(f"Error processing data: {e}")
         return None
@@ -730,9 +743,8 @@ def login_page(data):
                     else:
                         new_id = int(max_id) + 1
                     
-                    # In a real app, we would save this to the CSV/Database
+                    # In a real app, we would save this to the Firebase Database
                     # For now, we simulate it in session for this user
-                    # Note: This checks 'clean_data.csv' on disk, so 'data' needs to be fresh
                     
                     st.session_state['logged_in'] = True
                     st.session_state['target_user_id'] = new_id
