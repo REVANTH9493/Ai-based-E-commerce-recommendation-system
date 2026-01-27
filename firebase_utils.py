@@ -58,3 +58,35 @@ def get_data_from_firebase():
     except Exception as e:
         st.error(f"Error fetching data from Firebase: {e}")
         return None
+
+def get_users_from_firebase():
+    """
+    Fetches all user accounts from Firebase /users node.
+    Returns a dictionary of user_id -> user_data.
+    """
+    try:
+        ref = db.reference('/users')
+        users_data = ref.get()
+        if users_data:
+            return users_data
+        return {}
+    except Exception as e:
+        st.error(f"Error fetching users: {e}")
+        return {}
+
+def save_user_to_firebase(user_data):
+    """
+    Saves or updates a user record in Firebase /users node.
+    user_data must contain 'user_id'.
+    """
+    try:
+        if 'user_id' not in user_data:
+            return False
+            
+        user_id = str(user_data['user_id'])
+        ref = db.reference(f'/users/{user_id}')
+        ref.set(user_data)
+        return True
+    except Exception as e:
+        st.error(f"Error saving user: {e}")
+        return False

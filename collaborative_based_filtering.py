@@ -29,7 +29,7 @@ if __name__ == "__main__":
     from firebase_utils import get_data_from_firebase
     from preprocess_data import process_data
 
-    # raw_data = pd.read_csv("clean_data.csv")
+    # Fetch from Firebase
     raw_data = get_data_from_firebase()
     if raw_data is not None:
         data = process_data(raw_data)

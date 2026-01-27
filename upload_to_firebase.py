@@ -38,7 +38,7 @@ def upload_data():
         print("Upload successful! ✅")
         
     except FileNotFoundError:
-        print("Error: clean_data.csv not found!")
+        print("Error: Dataset file not found!")
     except Exception as e:
         print(f"Error occurred: {e}")
 

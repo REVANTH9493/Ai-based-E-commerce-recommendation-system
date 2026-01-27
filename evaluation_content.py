@@ -64,7 +64,7 @@ def evaluate_content_based_metrics(data, item_name, top_n=10):
 # Your main block:
 if __name__ == "__main__":
     from firebase_utils import get_data_from_firebase
-    # raw_data = pd.read_csv("clean_data.csv")
+    # Fetch from Firebase
     raw_data = get_data_from_firebase()
     if raw_data is None:
         print("Failed to load data")

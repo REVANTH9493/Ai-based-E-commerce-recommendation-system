@@ -10,6 +10,11 @@ from content_based_filtering import content_based_recommendation
 from collaborative_based_filtering import collaborative_filtering_recommendations
 from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
+import speech_recognition as sr
+from streamlit_mic_recorder import mic_recorder
+import io
+from image_recommender import get_text_embeddings, recommend_by_image
+from PIL import Image
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
 
 if "payment_done" not in st.session_state:
@@ -46,14 +51,14 @@ if url_category:
 st.markdown("""
 <style>
     .block-container {
-        padding-top: 15px;
+        padding-top: 50px !important;
         padding-bottom: 2rem;
     }
     div[data-testid="column"] {
         background-color: #ffffff;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
-        padding: 15px;
+        padding: 5px;
         text-align: center;
         box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
         transition: transform 0.2s;
@@ -72,11 +77,9 @@ st.markdown("""
         cursor: pointer;
     }
     .product-img {
-        display: block;
         height: 200px;
         width: 100%;
         object-fit: cover;
-        object-position: center;
         margin-bottom: 10px;
         border-radius: 4px;
         transition: transform 0.3s ease;
@@ -122,12 +125,13 @@ st.markdown("""
     }
     /* Custom Header Styling */
     .title-text {
-        font-size: 40px !important;
+        font-size: 32px !important;
         background: -webkit-linear-gradient(45deg, #FF4B2B, #FF416C);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800 !important;
         padding-top: 0px;
+        margin-top: 0px !important;
         margin-bottom: 0px;
         line-height: 1.2;
     }
@@ -176,51 +180,46 @@ st.markdown("""
         right: 10px;
     }
     .cat-img {
-        display: block;
-        height: 250px;
+        height: 180px;
         width: 100%;
         object-fit: cover;
-        object-position: center;
-        border-radius: 12px;
-        transition: transform 0.3s ease, filter 0.3s ease;
-        filter: brightness(0.9);
+        border-radius: 15px;
+        transition: filter 0.3s ease, transform 0.3s ease;
+        border: none;
+        box-shadow: none;
+        filter: blur(2px) brightness(0.7); /* Blur added as requested */
     }
     .cat-container:hover .cat-img {
         transform: scale(1.03);
-        filter: brightness(0.8);
+        filter: blur(0px) brightness(0.6); /* Unblur on hover? Or keep blur? User said "background image should be slightly blurred". Let's keep it blurred but maybe less dark. */
     }
     .cat-label {
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        color: #004d99;
+        color: white; /* White text */
         font-weight: 800;
-        font-size: 22px;
+        font-size: 24px;
         text-transform: uppercase;
-        text-decoration: underline;
+        letter-spacing: 1.5px;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.8);
         width: 100%;
         text-align: center;
+        margin-top: 0;
         pointer-events: none;
-        background: rgba(255, 255, 255, 0.4);
-        padding: 8px 0;
-        text-shadow: none;
     }
     .cat-container {
         position: relative;
         display: block;
-        width: 100%;
-        border-radius: 12px;
+        width: 100%;       /* Fluid width for grid columns */
+        /* min-width: 300px; REMOVED to prevent overlap in grid */
+        /* flex: 0 0 auto;   REMOVED as not needed for grid */
+        border-radius: 15px;
         overflow: hidden;
-        border: 2px solid #ccc;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         text-decoration: none;
-        background-color: #fff;
-        transition: all 0.3s ease;
-    }
-    .cat-container:hover {
-        border-color: #004d99;
-        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+        margin-bottom: 0; /* No bottom margin needed in scroll row */
     }
     /* Smart Badge Styling */
     .badge {
@@ -297,6 +296,13 @@ st.markdown("""
     .product-card-container {
         position: relative;
     }
+    /* Square Icon Button Styling (image & Voice) */
+    /* Simplified Header Button Styling */
+    .header-icon-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 if 'selected_product' not in st.session_state:
@@ -322,7 +328,37 @@ def clear_query_params():
     st.query_params.clear()
     if current_uid:
         st.query_params["user_id"] = current_uid
-from firebase_utils import get_data_from_firebase
+
+def header_voice_search():
+    """
+    Compact version of voice search for the header.
+    Returns the recognized text or None.
+    """
+    audio = mic_recorder(
+        start_prompt="🎙️",
+        stop_prompt="🛑",
+        just_once=True,
+        use_container_width=False,
+        format="wav",
+        key='header_mic'
+    )
+
+    if audio:
+        try:
+            r = sr.Recognizer()
+            audio_data = io.BytesIO(audio['bytes'])
+            with sr.AudioFile(audio_data) as source:
+                audio_recorded = r.record(source)
+            spoken_text = r.recognize_google(audio_recorded)
+            if spoken_text:
+                return spoken_text
+        except Exception as e:
+            st.toast(f"❌ Voice Error: {e}", icon="⚠️")
+            # Also log to console for debugging
+            print(f"Voice Search Error: {e}")
+            pass
+    return None
+from firebase_utils import get_data_from_firebase, get_users_from_firebase, save_user_to_firebase
 
 @st.cache_data
 def load_and_process_data():
@@ -443,9 +479,16 @@ def view_cart():
                 </div>
                 """, unsafe_allow_html=True
             )
-            if st.button("Remove", key=f"rm_{i}"):
-                st.session_state['cart_items'].pop(i)
-                st.rerun()
+            b_col1, b_col2 = st.columns([1, 1])
+            with b_col1:
+                if st.button("Details", key=f"detail_{i}"):
+                    st.session_state['selected_product'] = pd.Series(item)
+                    st.session_state['show_cart'] = False
+                    st.rerun()
+            with b_col2:
+                if st.button("Remove", key=f"rm_{i}"):
+                    st.session_state['cart_items'].pop(i)
+                    st.rerun()
     with col_summary:
         st.markdown(
             f"""
@@ -484,42 +527,70 @@ def show_payment():
 
     # Demo total calculation
     total_amount = len(cart_items) * 499  # demo price
-    st.subheader(f"Amount to Pay: ₹{total_amount}")
+    
+    st.markdown("### 📦 Shipping Details")
+    
+    # Pre-fill data from user profile if available
+    target_user_id = st.session_state.get('target_user_id', 0)
+    users_db = get_users_from_firebase() # Ensure we have latest
+    u_data = users_db.get(str(target_user_id), {})
+    
+    with st.container():
+        shipping_name = st.text_input("Receiver Name", value=u_data.get('name', ''), key="ship_name")
+        shipping_mobile = st.text_input("Mobile Number", value=u_data.get('mobile', ''), key="ship_mobile")
+        shipping_address = st.text_area("Delivery Address", value=u_data.get('address', ''), key="ship_addr")
+        
+    if not shipping_name or not shipping_mobile or not shipping_address:
+         st.warning("⚠️ Please fill in all shipping details above to proceed with payment.")
+         st.stop() # Stop execution here so button doesn't render
+    
+    # Save shipping info back to profile if changed (optional convenience)
+    if st.button("Confirm Details & Pay"):
+        # Auto-update profile for convenience
+        u_data['name'] = shipping_name
+        u_data['mobile'] = shipping_mobile
+        u_data['address'] = shipping_address
+        if 'user_id' not in u_data: u_data['user_id'] = target_user_id
+        save_user_to_firebase(u_data)
+        st.session_state['payment_ready'] = True
+        st.rerun()
 
-    components.html(f"""
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-
-    <button id="rzp-button"
-    style="
-    padding:14px 28px;
-    background:#0d6efd;
-    color:white;
-    border:none;
-    border-radius:6px;
-    font-size:16px;
-    cursor:pointer;">
-    Pay with Razorpay (Test)
-    </button>
-
-    <script>
-    var options = {{
-        "key": "rzp_test_S80byHh8aVKzjq",
-        "amount": "{total_amount * 100}",
-        "currency": "INR",
-        "name": "AI E-Commerce Demo",
-        "description": "Test Payment",
-        "handler": function (response) {{
-            alert("Payment Successful!\\nPayment ID: " + response.razorpay_payment_id);
-            window.location.search = "?payment=success";
-        }}
-    }};
-    var rzp = new Razorpay(options);
-    document.getElementById("rzp-button").onclick = function(e) {{
-        rzp.open();
-        e.preventDefault();
-    }};
-    </script>
-    """, height=700)
+    if st.session_state.get('payment_ready', False):
+        st.subheader(f"Amount to Pay: ₹{total_amount}")
+        components.html(f"""
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    
+        <button id="rzp-button"
+        style="
+        padding:14px 28px;
+        background:#0d6efd;
+        color:white;
+        border:none;
+        border-radius:6px;
+        font-size:16px;
+        cursor:pointer;">
+        Pay with Razorpay (Test)
+        </button>
+    
+        <script>
+        var options = {{
+            "key": "rzp_test_S80byHh8aVKzjq",
+            "amount": "{total_amount * 100}",
+            "currency": "INR",
+            "name": "AI E-Commerce Demo",
+            "description": "Test Payment for {shipping_name}",
+            "handler": function (response) {{
+                alert("Payment Successful!\\nPayment ID: " + response.razorpay_payment_id);
+                window.location.search = "?payment=success";
+            }}
+        }};
+        var rzp = new Razorpay(options);
+        document.getElementById("rzp-button").onclick = function(e) {{
+            rzp.open();
+            e.preventDefault();
+        }};
+        </script>
+        """, height=700)
 
 def view_product_details(product_row, data):
     """Renders the detailed view of a selected product."""
@@ -702,58 +773,142 @@ def login_page(data):
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown('<h1 class="title-text" style="text-align: center;">Welcome Back!</h1>', unsafe_allow_html=True)
-        st.markdown('<p style="text-align: center; color: #666;">Please login to continue</p>', unsafe_allow_html=True)
+        st.markdown('<h1 class="title-text" style="text-align: center;">Welcome Space!</h1>', unsafe_allow_html=True)
+        st.markdown('<p style="text-align: center; color: #666;">Please login or sign up to continue</p>', unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["Login", "Sign Up"])
         
+        users_db = get_users_from_firebase()
+
         with tab1:
             with st.form("login_form"):
-                user_id_input = st.text_input("User ID", placeholder="Enter your User ID")
+                user_input = st.text_input("User ID or Email", placeholder="Enter your User ID or Email")
                 password_input = st.text_input("Password", type="password", placeholder="Enter your password")
                 submitted = st.form_submit_button("Login")
                 
                 if submitted:
-                    if not user_id_input:
-                        st.error("Please enter a User ID.")
-                    elif password_input != "infosys@123":
-                        st.error("Incorrect password.")
+                    if not user_input or not password_input:
+                        st.error("Please enter both User ID/Email and Password.")
                     else:
-                        try:
-                            uid = int(user_id_input)
-                            if uid in data['ID'].values:
+                        input_str = user_input.strip()
+                        user_info = None
+                        uid_str = None
+                        
+                        # 1. Determine if Email or User ID
+                        if "@" in input_str:
+                            # Search by Email in users_db
+                            for uid, u_data in users_db.items():
+                                if u_data.get('email', '').lower() == input_str.lower():
+                                    user_info = u_data
+                                    uid_str = uid
+                                    break
+                            
+                            if not user_info:
+                                st.error("Email not found. Please sign up.")
+                        else:
+                            # Assume User ID
+                            uid_str = input_str
+                            user_info = users_db.get(uid_str)
+                        
+                        # 2. Validate Password if user found in Firebase
+                        if user_info:
+                            if str(user_info.get('password')) == password_input:
                                 st.session_state['logged_in'] = True
-                                st.session_state['target_user_id'] = uid
-                                st.query_params['user_id'] = str(uid) # Persist to URL
+                                st.session_state['target_user_id'] = int(uid_str)
+                                st.session_state['user_email'] = user_info.get('email')
+                                st.query_params['user_id'] = uid_str
                                 st.success("Login Successful!")
                                 st.rerun()
                             else:
-                                st.error("User ID not found.")
-                        except ValueError:
-                            st.error("User ID must be a number.")
+                                st.error("Incorrect password.")
+                        
+                        # 3. Fallback: Legacy ID lookup (Only if no @ symbol was used)
+                        elif "@" not in input_str:
+                            try:
+                                uid_int = int(input_str)
+                                if uid_int in data['ID'].values:
+                                    # Existing user but not yet in /users node
+                                    if password_input == "infosys@123":
+                                        st.session_state['logged_in'] = True
+                                        st.session_state['target_user_id'] = uid_int
+                                        st.session_state['needs_email'] = True # Trigger email prompt
+                                        st.session_state['temp_password'] = password_input
+                                        st.query_params['user_id'] = str(uid_int)
+                                        st.success("Welcome back! Please provide your email on the next step.")
+                                        st.rerun()
+                                    else:
+                                        st.error("Incorrect password for existing user account.")
+                                else:
+                                    st.error("User ID not found. Please sign up first.")
+                            except ValueError:
+                                st.error("User ID must be a number.")
         
         with tab2:
-            st.markdown("### New here?")
-            st.write("Create a new account effortlessly.")
-            if st.button("Create New Account"):
-                try:
-                    max_id = data['ID'].max()
-                    if pd.isna(max_id):
-                        new_id = 1
+            st.markdown("### Create an Account")
+            with st.form("signup_form"):
+                new_email = st.text_input("Email", placeholder="Enter your email")
+                new_password = st.text_input("Password", type="password", placeholder="Choose a password")
+                signup_submitted = st.form_submit_button("Sign Up Now")
+                
+                if signup_submitted:
+                    if not new_email or not new_password:
+                        st.error("Please provide both email and password.")
+                    elif "@" not in new_email:
+                        st.error("Please enter a valid email.")
                     else:
-                        new_id = int(max_id) + 1
-                    
-                    # In a real app, we would save this to the Firebase Database
-                    # For now, we simulate it in session for this user
-                    
-                    st.session_state['logged_in'] = True
-                    st.session_state['target_user_id'] = new_id
-                    st.query_params['user_id'] = str(new_id) # Persist to URL
-                    st.success(f"Account Created! Your User ID is **{new_id}**. Please remember it.")
-                    st.info(f"Your default password is 'infosys@123'.")
+                        # Generate unique random ID
+                        while True:
+                            random_id = random.randint(100000, 999999)
+                            if str(random_id) not in users_db and random_id not in data['ID'].values:
+                                break
+                        
+                        new_user = {
+                            "user_id": random_id,
+                            "email": new_email,
+                            "password": new_password
+                        }
+                        
+                        if save_user_to_firebase(new_user):
+                            st.session_state['logged_in'] = True
+                            st.session_state['target_user_id'] = random_id
+                            st.session_state['user_email'] = new_email
+                            st.query_params['user_id'] = str(random_id)
+                            st.success(f"Account Created! Your unique User ID is **{random_id}**")
+                            st.info("Please remember your User ID for future logins.")
+                            st.rerun()
+                        else:
+                            st.error("Failed to save user data. Please try again.")
+
+def prompt_for_email():
+    """Renders a modal-like UI to collect email from existing users."""
+    st.markdown("""
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #dee2e6; margin-bottom: 20px;">
+            <h3>📧 Complete Your Profile</h3>
+            <p>We see you haven't set an email for your account yet. Please provide it to secure your account.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    with st.form("email_collection"):
+        email = st.text_input("Email Address")
+        submitted = st.form_submit_button("Save and Continue")
+        if submitted:
+            if "@" in email:
+                user_id = st.session_state['target_user_id']
+                password = st.session_state.get('temp_password', 'infosys@123')
+                user_data = {
+                    "user_id": user_id,
+                    "email": email,
+                    "password": password
+                }
+                if save_user_to_firebase(user_data):
+                    st.session_state.pop('needs_email')
+                    st.session_state['user_email'] = email
+                    st.success("Profile updated!")
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Error creating account: {e}")
+                else:
+                    st.error("Failed to update profile.")
+            else:
+                st.error("Please enter a valid email.")
 
 
 def main():
@@ -776,20 +931,34 @@ def main():
     if 'logged_in' not in st.session_state:
         st.session_state['logged_in'] = False
     
+    users_db = get_users_from_firebase()
+
     # Try to restore session from URL if not logged in
     if not st.session_state['logged_in']:
         qp_uid = st.query_params.get("user_id")
         if qp_uid:
             try:
-                restored_uid = int(qp_uid)
-                if restored_uid in data['ID'].values:
+                restored_uid_str = str(qp_uid)
+                # Check /users node first
+                if restored_uid_str in users_db:
                      st.session_state['logged_in'] = True
-                     st.session_state['target_user_id'] = restored_uid
+                     st.session_state['target_user_id'] = int(restored_uid_str)
+                     st.session_state['user_email'] = users_db[restored_uid_str].get('email')
+                # Fallback to product dataset for legacy restoration
+                elif int(restored_uid_str) in data['ID'].values:
+                     st.session_state['logged_in'] = True
+                     st.session_state['target_user_id'] = int(restored_uid_str)
+                     st.session_state['needs_email'] = True
             except:
                 pass
 
     if not st.session_state['logged_in']:
         login_page(data)
+        return
+
+    # Trigger email collection for existing users discovered during login
+    if st.session_state.get('needs_email'):
+        prompt_for_email()
         return
     if st.session_state.get("payment_done"):
         st.success("🎉 Payment successful! Your order has been placed.")
@@ -845,28 +1014,56 @@ def main():
         render_chatbot_ui(data)
     
     # --- Title & Search Header ---
-    h_col1, h_col2 = st.columns([3, 1]) # Ratio to give Title more space, Search approx 300px logic
+    h_col1, h_col2 = st.columns([3, 2]) 
     with h_col1:
-        st.markdown('<h1 class="title-text" style="text-align: left; margin-bottom: 5px;">AI-Based E-commerce Recommendation System</h1>', unsafe_allow_html=True)
+        st.markdown('<h1 class="title-text" style="text-align: left; margin-bottom: 0px;">AI-Based E-commerce Recommendation System</h1>', unsafe_allow_html=True)
     with h_col2:
-        # Align search bar to match title visual baseline
-        st.markdown('<style>div[data-testid="stTextInput"] { width: 240px; margin-left: 3px; margin-top: 20px; }</style>', unsafe_allow_html=True)
-        # Spacer removed for better alignment
-        if 'search_input' not in st.session_state:
-            st.session_state['search_input'] = ""
-        search_query = st.text_input("Search", value=st.session_state['search_input'], placeholder="🔍 Search...", label_visibility="collapsed", key="search_widget_header")
-        if search_query: st.session_state['search_input'] = search_query
+        # Integrated Header Search Area: [🖼️] [🎙️] [Search... ]
+        inner_col1, inner_col2, inner_col3 = st.columns([0.2, 0.2, 0.6], gap="small")
+        
+        with inner_col1:
+            # 1. image search Button
+            st.markdown('<div class="header-icon-container" style="margin-right: -10px;">', unsafe_allow_html=True)
+            if st.button("🖼️", key="header_image_search_btn", help="Image Search"):
+                set_selected_product(None)
+                st.session_state['active_section'] = 'Image Search'
+                st.session_state['show_cart'] = False
+                st.session_state['show_payment'] = False
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with inner_col2:
+            # 2. Voice Search Button
+            st.markdown('<div class="header-icon-container" style="margin-right: -10px; margin-left: -10px;">', unsafe_allow_html=True)
+            v_query = header_voice_search()
+            st.markdown('</div>', unsafe_allow_html=True)
+            if v_query:
+                st.session_state['search_input'] = v_query
+                st.rerun()
+
+        with inner_col3:
+            # 3. Text Search box
+            st.markdown('<style>div[data-testid="stTextInput"] { width: 100%; margin-top: 0px; margin-left: -15px; }</style>', unsafe_allow_html=True)
+            if 'search_input' not in st.session_state:
+                st.session_state['search_input'] = ""
+        
+            search_query = st.text_input("Search", value=st.session_state['search_input'], placeholder="🔍 Search...", label_visibility="collapsed", key="search_widget_header")
+            if search_query: st.session_state['search_input'] = search_query
+    
+    # Handle Image Search Results Display
     
     # --- Top Navigation Header ---
     target_user_id = st.session_state.get('target_user_id', 0)
     
+    # Rebalanced Nav: Home, Wishlist, Orders, Cart, Profile
     nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
     with nav_col1:
          if st.button("🏠 Home", use_container_width=True):
              set_selected_product(None)
              st.session_state['search_input'] = ""
              st.session_state['active_section'] = 'Home'
-             st.session_state['show_cart'] = False # Ensure we exit cart view
+             st.session_state['show_cart'] = False
+             st.session_state['show_payment'] = False
              clear_query_params()
              st.rerun()
     with nav_col2:
@@ -874,42 +1071,33 @@ def main():
              set_selected_product(None)
              st.session_state['active_section'] = 'Wishlist'
              st.session_state['show_cart'] = False 
+             st.session_state['show_payment'] = False
              st.rerun()
     with nav_col3:
          if st.button("📦 Orders", use_container_width=True):
              set_selected_product(None)
              st.session_state['active_section'] = 'Orders'
              st.session_state['show_cart'] = False 
+             st.session_state['show_payment'] = False
              st.rerun()
     with nav_col4:
-        # We can also put Cart here or keep it in the search row. 
-        # Including it here for consistent "Navigation" experience.
         c_count = len(st.session_state.get('cart_items', []))
         if st.button(f"🛒 Cart ({c_count})", key="nav_cart_header", use_container_width=True):
              set_selected_product(None)
-             st.session_state['active_section'] = 'Cart' # Explicit state for clarity
+             st.session_state['active_section'] = 'Cart'
              st.session_state['show_cart'] = True
+             st.session_state['show_payment'] = False
              st.rerun()
     with nav_col5:
          if st.button("👤 Profile", key="profile_header", use_container_width=True):
              set_selected_product(None)
              st.session_state['active_section'] = 'Profile'
              st.session_state['show_cart'] = False 
+             st.session_state['show_payment'] = False
              st.rerun()
 
-    st.markdown('<hr style="margin-top: 15px; margin-bottom: 15px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
+    st.markdown('<hr style="margin-top: 5px; margin-bottom: 10px; border: 0; border-top: 1px solid #eee;">', unsafe_allow_html=True)
 
-    # --- Profile Section in Main Area (if active) ---
-    if st.session_state.get('active_section') == 'Profile':
-        st.markdown(f"### User Profile: #{target_user_id}")
-        st.info(f"You are logged in as User #{target_user_id}")
-        if st.button("Logout", key="logout_profile_btn"):
-             st.session_state['logged_in'] = False
-             st.session_state['target_user_id'] = 0
-             st.session_state['active_section'] = 'Home'
-             st.query_params.clear() # Clear URL persistence
-             st.rerun()
-        st.divider()
 
     # --- Filters (Main Area) ---
     # Moved from Sidebar to Expander
@@ -979,10 +1167,114 @@ def main():
                  wishlist_products = wishlist_products.drop_duplicates(subset=['ProdID'])
                  
                  if wishlist_products.empty:
-                      st.warning("Wishlist items found, but product details are missing from database.")
+                       st.warning("Wishlist items found, but product details are missing from database.")
                  else:
-                      st.success(f"Found {len(wishlist_products)} items in your wishlist.")
-                      display_product_grid(wishlist_products, section_key="wishlist")
+                       st.success(f"Found {len(wishlist_products)} items in your wishlist.")
+                       display_product_grid(wishlist_products, section_key="wishlist")
+        elif st.session_state.get("active_section") == "Image Search":
+            st.markdown("<div class='section-header'>🖼️ Image Search</div>", unsafe_allow_html=True)
+            
+            st.write("Upload an image of a product to find similar items in our catalog.")
+            
+            uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"], key="image_search_uploader")
+            
+            if uploaded_file is not None:
+                from PIL import Image
+                query_image = Image.open(uploaded_file).convert("RGB")
+                st.image(query_image, caption="Uploaded Image", width=300)
+                
+                if st.button("Search Similar Products"):
+                    try:
+                        with st.spinner("Analyzing image vs catalog..."):
+                            # Recommend by matching Image vs Image directly using new logic
+                            recommendations = recommend_by_image(query_image, data, top_n=12)
+                        
+                        st.markdown("<div class='section-header'>✨ image Recommendations</div>", unsafe_allow_html=True)
+                        if not recommendations.empty:
+                            display_product_grid(recommendations, section_key="image_search")
+                        else:
+                            st.info("No matching products found.")
+                    except Exception as e:
+                        st.error(f"image search encountered an issue: {e}")
+        elif st.session_state.get("active_section") == "Profile":
+             st.markdown("<div class='section-header'>👤 User Profile</div>", unsafe_allow_html=True)
+             
+             # 1. User Details
+             st.subheader("Account Details")
+             st.write(f"**User ID:** {target_user_id}")
+             
+             # Fetch latest data
+             u_data = users_db.get(str(target_user_id), {})
+             if not u_data:
+                 u_data = {'user_id': target_user_id, 'email': st.session_state.get('user_email', '')}
+             
+             current_email = u_data.get('email', st.session_state.get('user_email', ''))
+             st.write(f"**Email:** {current_email}")
+             
+             # Name and Mobile Update
+             with st.form("profile_update_form"):
+                 st.markdown("##### Personal Information")
+                 current_name = u_data.get('name', '')
+                 current_mobile = u_data.get('mobile', '')
+                 
+                 new_name = st.text_input("Full Name", value=current_name, placeholder="Enter your name")
+                 new_mobile = st.text_input("Mobile Number", value=current_mobile, placeholder="Enter your mobile number")
+                 current_address = u_data.get('address', '')
+                 new_address = st.text_area("Shipping Address", value=current_address, placeholder="Enter your full address")
+                 
+                 update_submitted = st.form_submit_button("Update Profile")
+                 
+                 if update_submitted:
+                     u_data['name'] = new_name
+                     u_data['mobile'] = new_mobile
+                     u_data['address'] = new_address
+                     # Ensure we have the password to preserve it if it wasn't in u_data for some reason
+                     # (Though getting from DB should have it)
+                     if save_user_to_firebase(u_data):
+                         st.success("Profile updated successfully!")
+                         # Update local db cache strictly for this user to reflect valid state immediately
+                         users_db[str(target_user_id)] = u_data
+                         st.rerun()
+                     else:
+                         st.error("Failed to update profile.")
+             
+             st.markdown("---")
+             
+             # 2. Reset Password
+             st.subheader("Reset Password")
+             with st.form("reset_password_form"):
+                  curr_pass = st.text_input("Current Password", type="password")
+                  new_pass = st.text_input("New Password", type="password")
+                  confirm_pass = st.text_input("Confirm New Password", type="password")
+                  reset_btn = st.form_submit_button("Update Password")
+                  
+                  if reset_btn:
+                       u_data = users_db.get(str(target_user_id))
+                       if not u_data:
+                            st.error("User record not found.")
+                       elif str(u_data.get('password')) != curr_pass:
+                            st.error("Current password is incorrect.")
+                       elif new_pass != confirm_pass:
+                            st.error("New passwords do not match.")
+                       elif not new_pass:
+                            st.error("Password cannot be empty.")
+                       else:
+                            # Update in Firebase
+                            u_data['password'] = new_pass
+                            if save_user_to_firebase(u_data):
+                                 st.success("Password updated successfully!")
+                            else:
+                                 st.error("Failed to update password. Please try again.")
+             
+             st.markdown("---")
+             
+             # 3. Logout
+             st.subheader("Session")
+             if st.button("Log Out", type="primary"):
+                  for key in list(st.session_state.keys()):
+                       del st.session_state[key]
+                  st.query_params.clear()
+                  st.rerun()
         elif is_filtering:
              st.markdown(f"<div class='section-header'>🔍 Filtered Results ({len(filtered_data)})</div>", unsafe_allow_html=True)
              display_product_grid(filtered_data, section_key="filtered")
