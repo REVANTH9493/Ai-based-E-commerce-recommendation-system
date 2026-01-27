@@ -52,6 +52,59 @@ Total Products: {len(self.data)}"""
                  return self.data.sort_values(by='Rating', ascending=False).head(5)
             return self.data.head(5)
 
+        # 1. Exact Category Match Implementation
+        # This fixes the "Perfume" -> "Lotion" issue by prioritizing the Category column
+        unique_categories = self.data['Category'].dropna().unique()
+        
+        # Explicit mapping for common terms -> Categories
+        # (Add more if needed based on your dataset)
+        category_aliases = {
+            "perfume": "Fragrance",
+            "scent": "Fragrance",
+            "cologne": "Fragrance",
+            "makeup": "Makeup",
+            "hair": "Hair Care",
+            "skin": "Skin Care"
+        }
+        
+        target_category = None
+        
+        # Check aliases first
+        for key, val in category_aliases.items():
+            if key in query_lower and val in unique_categories:
+                target_category = val
+                break
+        
+        # Check actual category names
+        if not target_category:
+            for cat in unique_categories:
+                if cat.lower() in query_lower:
+                    target_category = cat
+                    break
+        
+        if target_category:
+            # Filter strictly by this category
+            cat_results = self.data[self.data['Category'] == target_category]
+            
+            # If query has other words (e.g., "Chanel Perfume"), further filter by them
+            # removing the category name itself from query to finding specific item
+            clean_query = query_lower.replace(target_category.lower(), "").strip()
+            
+            if clean_query and len(clean_query) > 2:
+                 sub_mask = (
+                    cat_results['Name'].str.lower().str.contains(clean_query, na=False) |
+                    cat_results['Brand'].str.lower().str.contains(clean_query, na=False)
+                 )
+                 refined_results = cat_results[sub_mask]
+                 if not refined_results.empty:
+                     return refined_results.head(3)
+            
+            # If no refinement or refinement failed, return top items from category
+            if 'Rating' in cat_results.columns:
+                 return cat_results.sort_values(by='Rating', ascending=False).head(3)
+            return cat_results.head(3)
+
+        # 2. Fallback to Broad Search (existing logic)
         mask = (
             self.data['Name'].str.lower().str.contains(query_lower, na=False) |
             self.data['Brand'].str.lower().str.contains(query_lower, na=False) |
@@ -99,6 +152,7 @@ Total Products: {len(self.data)}"""
             return "I can only help with shopping and product questions. How can I assist with your purchase today? 🛍️", pd.DataFrame()
 
         # 5️⃣ Convert Products into Text (Prompt Injection)
+        product_list = ""
         if not products.empty:
             product_list = "\n".join([
                 f"- {row['Name']} – ₹{row['Price']}" 
@@ -106,7 +160,25 @@ Total Products: {len(self.data)}"""
             ])
             prompt_context = f"Available products:\n{product_list}"
         else:
-            prompt_context = "No products found in the catalog for this specific query."
+            # FALLBACK: If strictly shopping related but no results, show Top Rated
+            if self.is_shopping_related(user_message):
+                if 'Rating' in self.data.columns:
+                     fallback_products = self.data.sort_values(by='Rating', ascending=False).head(3)
+                else:
+                     fallback_products = self.data.head(3)
+                
+                if not fallback_products.empty:
+                    product_list = "\n".join([
+                        f"- {row['Name']} – ₹{row['Price']}" 
+                        for _, row in fallback_products.iterrows()
+                    ])
+                    # Update products df so front-end renders them too
+                    products = fallback_products
+                    prompt_context = f"No exact matches found. However, here are our Top Rated items you can recommend instead:\n{product_list}"
+                else:
+                    prompt_context = "No products found in the catalog."
+            else:
+                prompt_context = "No products found in the catalog for this specific query."
         
         # Build prompt
         full_prompt = f"""[SYSTEM] You are a helpful e-commerce shopping assistant. 
