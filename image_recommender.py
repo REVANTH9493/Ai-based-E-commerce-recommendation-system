@@ -23,7 +23,7 @@ if not HF_TOKEN:
 
 # API Endpoint (Feature Extraction Pipeline)
 # UPDATED: Using router + /models/ path + sentence-transformers (most likely to be available)
-API_URL = "https://router.huggingface.co/hf-inference/models/sentence-transformers/clip-ViT-B-32"
+API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/clip-ViT-B-32"
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 
