@@ -13,7 +13,7 @@ from item_based_collaborative_filtering import item_based_collaborative_filterin
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
 import io
-from image_recommender import get_text_embeddings, recommend_by_image
+
 from PIL import Image
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
 
@@ -1022,15 +1022,8 @@ def main():
         inner_col1, inner_col2, inner_col3 = st.columns([0.2, 0.2, 0.6], gap="small")
         
         with inner_col1:
-            # 1. image search Button
-            st.markdown('<div class="header-icon-container" style="margin-right: -10px;">', unsafe_allow_html=True)
-            if st.button("🖼️", key="header_image_search_btn", help="Image Search"):
-                set_selected_product(None)
-                st.session_state['active_section'] = 'Image Search'
-                st.session_state['show_cart'] = False
-                st.session_state['show_payment'] = False
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+            # 1. Spacer (Image button removed)
+            st.write("")
 
         with inner_col2:
             # 2. Voice Search Button
@@ -1171,31 +1164,7 @@ def main():
                  else:
                        st.success(f"Found {len(wishlist_products)} items in your wishlist.")
                        display_product_grid(wishlist_products, section_key="wishlist")
-        elif st.session_state.get("active_section") == "Image Search":
-            st.markdown("<div class='section-header'>🖼️ Image Search</div>", unsafe_allow_html=True)
-            
-            st.write("Upload an image of a product to find similar items in our catalog.")
-            
-            uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"], key="image_search_uploader")
-            
-            if uploaded_file is not None:
-                from PIL import Image
-                query_image = Image.open(uploaded_file).convert("RGB")
-                st.image(query_image, caption="Uploaded Image", width=300)
-                
-                if st.button("Search Similar Products"):
-                    try:
-                        with st.spinner("Analyzing image vs catalog..."):
-                            # Recommend by matching Image vs Image directly using new logic
-                            recommendations = recommend_by_image(query_image, data, top_n=12)
-                        
-                        st.markdown("<div class='section-header'>✨ image Recommendations</div>", unsafe_allow_html=True)
-                        if not recommendations.empty:
-                            display_product_grid(recommendations, section_key="image_search")
-                        else:
-                            st.info("No matching products found.")
-                    except Exception as e:
-                        st.error(f"image search encountered an issue: {e}")
+
         elif st.session_state.get("active_section") == "Profile":
              st.markdown("<div class='section-header'>👤 User Profile</div>", unsafe_allow_html=True)
              
