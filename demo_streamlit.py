@@ -1022,15 +1022,25 @@ def main():
     
     # Rebalanced Nav: Home, Wishlist, Orders, Cart, Profile
     nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns(5)
+    # Define Callback for Home Reset (Fixes StreamlitAPIException)
+    def reset_home_state():
+        st.session_state['selected_product'] = None
+        st.session_state['search_input'] = ""
+        # Safe to modify here as callback runs BEFORE the next script execution
+        if 'search_widget_header' in st.session_state:
+             st.session_state['search_widget_header'] = ""
+        st.session_state['active_section'] = 'Home'
+        st.session_state['show_cart'] = False
+        st.session_state['show_payment'] = False
+
     with nav_col1:
-         if st.button("🏠 Home", use_container_width=True):
-             set_selected_product(None)
-             st.session_state['search_input'] = ""
-             st.session_state['active_section'] = 'Home'
-             st.session_state['show_cart'] = False
-             st.session_state['show_payment'] = False
+         # Use on_click to trigger the reset safely before rerun
+         if st.button("🏠 Home", use_container_width=True, on_click=reset_home_state):
              clear_query_params()
-             st.rerun()
+             # No need to manual st.rerun() if button interaction triggers it, 
+             # but keeping it doesn't hurt, though typically on_click handles the update cycle.
+             # However, we need to clear params which might require a rerun to reflect in URL if clear matches.
+             pass
     with nav_col2:
          if st.button("❤️ Wishlist", use_container_width=True):
              set_selected_product(None)
