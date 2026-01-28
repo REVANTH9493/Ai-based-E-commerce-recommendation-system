@@ -6,30 +6,31 @@ import pandas as pd
 import streamlit as st
 import os
 
-# Singleton pattern for Firebase app to avoid "App already exists" errors in Streamlit
-if not firebase_admin._apps:
-    try:
-        # Check for secrets first (Cloud/secure deployment)
-        if "firebase" in st.secrets:
-            # Streamlit secrets usually behave like a dict or can be converted to one
-            service_account_info = dict(st.secrets["firebase"])
+def initialize_firebase_app():
+    # Singleton pattern for Firebase app to avoid "App already exists" errors in Streamlit
+    if not firebase_admin._apps:
+        try:
+            # Check for secrets first (Cloud/secure deployment)
+            if "firebase" in st.secrets:
+                # Streamlit secrets usually behave like a dict or can be converted to one
+                service_account_info = dict(st.secrets["firebase"])
+                
+                # Initialize with secrets
+                cred = credentials.Certificate(service_account_info)
+                firebase_admin.initialize_app(cred, {
+                    'databaseURL': 'https://ai-based-recommendation-55bcb-default-rtdb.asia-southeast1.firebasedatabase.app/'
+                })
             
-            # Initialize with secrets
-            cred = credentials.Certificate(service_account_info)
-            firebase_admin.initialize_app(cred, {
-                'databaseURL': 'https://ai-based-recommendation-55bcb-default-rtdb.asia-southeast1.firebasedatabase.app/'
-            })
-        
-        # Fallback to local file
-        elif os.path.exists('serviceAccountKey.json'):
-            cred = credentials.Certificate('serviceAccountKey.json')
-            firebase_admin.initialize_app(cred, {
-                'databaseURL': 'https://ai-based-recommendation-55bcb-default-rtdb.asia-southeast1.firebasedatabase.app/'
-            })
-        else:
-            st.error("Firebase credentials not found (checked secrets and serviceAccountKey.json).")
-    except Exception as e:
-        st.error(f"Failed to initialize Firebase: {e}")
+            # Fallback to local file
+            elif os.path.exists('serviceAccountKey.json'):
+                cred = credentials.Certificate('serviceAccountKey.json')
+                firebase_admin.initialize_app(cred, {
+                    'databaseURL': 'https://ai-based-recommendation-55bcb-default-rtdb.asia-southeast1.firebasedatabase.app/'
+                })
+            else:
+                st.error("Firebase credentials not found (checked secrets and serviceAccountKey.json).")
+        except Exception as e:
+            st.error(f"Failed to initialize Firebase: {e}")
 
 @st.cache_data(ttl=600)  # Cache for 10 minutes to avoid hitting DB on every interaction
 def get_data_from_firebase():
