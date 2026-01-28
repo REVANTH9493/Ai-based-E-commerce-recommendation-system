@@ -990,12 +990,13 @@ def main():
     with h_col1:
         st.markdown('<h1 class="title-text" style="text-align: left; margin-bottom: 0px;">AI-Based E-commerce Recommendation System</h1>', unsafe_allow_html=True)
     with h_col2:
-        # Integrated Header Search Area: [🖼️] [Search...      ]
-        inner_col1, inner_col3 = st.columns([0.1, 0.9], gap="small")
+        # Integrated Header Search Area: [🖼️] [🎙️] [Search... ]
+        inner_col1, inner_col2 = st.columns([0.2, 0.8], gap="small")
         
         with inner_col1:
             # 1. image search Button
-            st.markdown('<div class="header-icon-container" style="margin-right: -10px;">', unsafe_allow_html=True)
+            # Increased container size and added margin-left to move it "right side"
+            st.markdown('<div class="header-icon-container" style="margin-left: 20px;">', unsafe_allow_html=True)
             if st.button("🖼️", key="header_image_search_btn", help="Image Search"):
                 set_selected_product(None)
                 st.session_state['active_section'] = 'Image Search'
@@ -1004,9 +1005,10 @@ def main():
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-        with inner_col3:
+        with inner_col2:
+            # 3. Text Search box (Renumbered)
             # 3. Text Search box
-            st.markdown('<style>div[data-testid="stTextInput"] { width: 100%; margin-top: 0px; margin-left: -15px; }</style>', unsafe_allow_html=True)
+            st.markdown('<style>div[data-testid="stTextInput"] { width: 100%; margin-top: 0px; margin-left: -10px; }</style>', unsafe_allow_html=True)
             if 'search_input' not in st.session_state:
                 st.session_state['search_input'] = ""
         
