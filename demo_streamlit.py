@@ -183,7 +183,7 @@ st.markdown("""
     .cat-img {
         height: 180px;
         width: 100%;
-        object-fit: cover;
+        object-fit: fill; /* User requested exact fit (distorted if needed) */
         border-radius: 15px;
         transition: filter 0.3s ease, transform 0.3s ease;
         border: none;
@@ -1376,12 +1376,12 @@ def main():
             st.markdown("<div class='section-header'>📦 Shop by Category</div>", unsafe_allow_html=True)
             
             categories = [
-                {"name": "Household", "img": "https://mastcert.com/wp-content/uploads/2023/05/bytovaya-himiya.jpg?q=80&w=600&auto=format&fit=crop"},
-                {"name": "Grooming", "img": "https://blogscdn.thehut.net/wp-content/uploads/sites/32/2018/04/17133037/1200x672_217775857-MC-MK-April-photography-batching-Shot14_1200x672_acf_cropped_1200x672_acf_cropped.jpg?q=80&w=600&auto=format&fit=crop"},
-                {"name": "Fragrance", "img": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=600&auto=format&fit=crop"},
-                {"name": "Hair Care", "img": "https://images.unsplash.com/photo-1560869713-7d0a29430803?q=80&w=600&auto=format&fit=crop"},
-                {"name": "Nail Polish", "img": "https://www.makeup.com/-/media/project/loreal/brand-sites/mdc/americas/us/articles/2023/01-january/04-does-nail-polish-expire/does-nail-polish-expire-hero-mudc-122722.jpg?cx=0.5&cy=0.5&cw=705&ch=529&blr=False&hash=92FB2BCC56C0A381A75826D5939CFF96?q=80&w=600&auto=format&fit=crop"},
-                {"name": "Makeup", "img": "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?q=80&w=600&auto=format&fit=crop"}
+                {"name": "Household", "img": "https://res.cloudinary.com/dzatmuvbd/image/upload/v1769608690/house_hold_zyosrr.jpg"},
+                {"name": "Grooming", "img": "https://res.cloudinary.com/dzatmuvbd/image/upload/v1769608689/grooming_zpzo56.jpg"},
+                {"name": "Fragrance", "img": "https://res.cloudinary.com/dzatmuvbd/image/upload/v1769608689/fragnance_w9wpw3.jpg"},
+                {"name": "Hair Care", "img": "https://res.cloudinary.com/dzatmuvbd/image/upload/v1769608689/hair_care_fxuayy.jpg"},
+                {"name": "Nail Polish", "img": "https://res.cloudinary.com/dzatmuvbd/image/upload/v1769608689/nail_polish_jxjexv.jpg"},
+                {"name": "Makeup", "img": "https://res.cloudinary.com/dzatmuvbd/image/upload/v1769608689/makeup_dv84xl.jpg"}
             ]
             
             # Render as horizontal scrolling HTML container with buttons
