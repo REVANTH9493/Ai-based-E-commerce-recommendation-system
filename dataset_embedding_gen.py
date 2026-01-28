@@ -23,7 +23,7 @@ def generate_embeddings():
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # we use the OpenAI version locally as it loads reliably with 'transformers'
-    model_name = "openai/clip-vit-base-patch32"
+    model_name = "openai/clip-vit-large-patch14"
     model = CLIPModel.from_pretrained(model_name).to(device)
     processor = CLIPProcessor.from_pretrained(model_name)
     
