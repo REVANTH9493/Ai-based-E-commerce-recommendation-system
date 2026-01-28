@@ -1,37 +1,27 @@
 import streamlit as st
+from PIL import Image
+import pandas as pd
 import requests
 from io import BytesIO
-import os
-import base64
-from dotenv import load_dotenv
+import torch
+from transformers import CLIPProcessor, CLIPModel
 import numpy as np
-import pandas as pd
-from PIL import Image
-
-# Load env variables explicitly
-load_dotenv()
+from firebase_utils import get_data_from_firebase
+from preprocess_data import process_data
 
 # -----------------------------
-# Configuration
+# Device setup
 # -----------------------------
-HF_TOKEN = os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN")
-
-# Force-check token existence
-if not HF_TOKEN:
-    st.error("⚠️ Missing Hugging Face Token! Please set 'HF_TOKEN' in your .env file or Streamlit secrets.")
-    st.stop()
-
-# API Endpoint (Feature Extraction Pipeline)
-# UPDATED: Using router + /models/ path + sentence-transformers (most likely to be available)
-API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/clip-ViT-B-32"
-headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # -----------------------------
-# Load CLIP model (API Placeholder)
+# Load CLIP model (Cached)
 # -----------------------------
-# WE DO NOT LOAD MODELS LOCALLY ANYMORE
-
+@st.cache_resource
+def load_clip_model():
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    return model, processor
 
 # -----------------------------
 # Image Loading Helper
@@ -48,65 +38,92 @@ def load_image_from_url(url):
 # -----------------------------
 # Feature Extraction (Cached)
 # -----------------------------
+def extract_features_safe(outputs):
+    """
+    Safely extracts a tensor from various Hugging Face model outputs.
+    """
+    # 1. If it's already a tensor, return it
+    if isinstance(outputs, torch.Tensor):
+        return outputs
+        
+    # 2. Try common attribute names for embeddings/pooled output
+    if hasattr(outputs, 'image_embeds') and outputs.image_embeds is not None:
+        return outputs.image_embeds
+    if hasattr(outputs, 'text_embeds') and outputs.text_embeds is not None:
+        return outputs.text_embeds
+    if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+        return outputs.pooler_output
+    if hasattr(outputs, 'last_hidden_state') and outputs.last_hidden_state is not None:
+        # Fallback: Mean pooling or CLS token if pooler_output is missing
+        return outputs.last_hidden_state.mean(dim=1)
+        
+    # 3. Try tuple indexing (outputs[1] is often pooled, [0] is last_hidden)
+    if isinstance(outputs, (tuple, list)):
+        if len(outputs) > 1:
+            return outputs[1] # Potential pooler_output
+        elif len(outputs) > 0:
+            return outputs[0].mean(dim=1) if outputs[0].dim() == 3 else outputs[0]
+            
+    # 4. If all else fails, return outputs (will likely crash downstream but we tried)
+    return outputs
 
 @st.cache_data
 def get_dataset_features(data):
     """
-    Loads pre-computed embeddings from file since we cannot compute them live on Cloud.
+    Computes CLIP embeddings for products using their TEXT descriptions (Name + Brand + Category).
+    This is INSTANT (Seconds) compared to downloading images (Minutes/Hours).
+    CLIP allows matching an Image Query against these Text Embeddings seamlessly.
     """
-    # Try loading from local file (expected to be in repo)
-    try:
-        if os.path.exists("text_embeddings_cache.npy"):
-            all_features = np.load("text_embeddings_cache.npy")
-            # We assume indices align with data.index if data hasn't changed drastically.
-            if len(all_features) == len(data):
-                return all_features, data.index.tolist()
-            else:
-                print("Warning: Content mismatch between cache and live data.")
-                min_len = min(len(all_features), len(data))
-                return all_features[:min_len], data.index.tolist()[:min_len]
-        return np.array([]), []
-    except Exception as e:
-        st.error(f"Error loading cache: {e}")
-        return np.array([]), []
+    model, processor = load_clip_model()
+    
+    # clear session state of any partial image loads if existing
+    
+    # 1. Prepare Text Data
+    # We combine important textual features for a rich semantic representation
+    # Fill NaNs to avoid errors
+    data_filled = data.fillna('')
+    
+    # Construct descriptive text: "Brand Name Category Description"
+    # Truncate descriptions to fit context window if needed, CLIP handles 77 tokens
+    literals = (data_filled['Brand'] + " " + data_filled['Name'] + " " + data_filled['Category']).astype(str).tolist()
+    
+    # 2. Batch Process Text
+    batch_features = []
+    valid_indices = []
+    batch_size = 64 # Text acts faster, can handle larger batches
 
-
-def get_uploaded_image_embedding(uploaded_image_obj):
-    """
-    Sends uploaded image to HF API for feature extraction.
-    Handles both Streamlit UploadedFile and PIL Image.
-    """
-    try:
-        # Convert to bytes
-        img_byte_arr = BytesIO()
+    # Create a progress bar if running in Streamlit
+    # st_progress = st.progress(0)
+    
+    total = len(literals)
+    for i in range(0, total, batch_size):
+        batch_text = literals[i:i+batch_size]
+        batch_indices = data.index[i:i+batch_size].tolist()
         
-        # Check if it's a PIL Image or Streamlit UploadedFile
-        if isinstance(uploaded_image_obj, Image.Image):
-             uploaded_image_obj.save(img_byte_arr, format='PNG')
-        else:
-             # Assume it's a file-like object (Streamlit UploadedFile)
-             uploaded_image_obj.seek(0)
-             img_byte_arr.write(uploaded_image_obj.read())
+        # Tokenize
+        inputs = processor(text=batch_text, return_tensors="pt", padding=True, truncation=True).to(device)
         
-        image_bytes = img_byte_arr.getvalue()
-        
-        # Base64 encode
-        encoded = base64.b64encode(image_bytes).decode("utf-8")
-
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json={"inputs": encoded}
-        )
-        
-        if response.status_code != 200:
-            st.error(f"API Error {response.status_code}: {response.text}")
-            return None
+        with torch.no_grad():
+            raw_text_output = model.get_text_features(**inputs)
+            text_features = extract_features_safe(raw_text_output)
             
-        return response.json()
-    except Exception as e:
-        st.error(f"Error fetching embedding: {e}")
-        return None
+            # Normalize for cosine similarity
+            if isinstance(text_features, torch.Tensor):
+                text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
+                batch_features.append(text_features.cpu().numpy())
+                valid_indices.extend(batch_indices)
+            
+        # Optional: Update progress
+        # if i + batch_size < total:
+        #    st_progress.progress((i + batch_size) / total)
+    
+    # st_progress.empty()
+
+    if batch_features:
+        all_features = np.concatenate(batch_features, axis=0)
+        return all_features, valid_indices
+    return np.array([]), []
+
 
 def recommend_by_image(uploaded_image, data=None, top_n=5):
     """
@@ -115,62 +132,55 @@ def recommend_by_image(uploaded_image, data=None, top_n=5):
     """
     # 1. Load Data if not provided
     if data is None:
-        from firebase_utils import get_data_from_firebase
-        from preprocess_data import process_data
-        
         raw_data = get_data_from_firebase()
         if raw_data is None or raw_data.empty:
             st.error("No data available for recommendations.")
             return pd.DataFrame()
         data = process_data(raw_data)
     
-    # 2. Get Dataset Features (Cached)
-    with st.spinner("Indexing product catalog..."):
+    # 2. Get Features (Cached & Optimized to Text)
+    # This will now accept the processed data and run in seconds
+    with st.spinner("Indexing product catalog... (Fast Text-Mode)"):
         dataset_features, valid_indices = get_dataset_features(data)
     
     if len(dataset_features) == 0:
         st.error("Could not extract features from product catalog.")
         return pd.DataFrame()
 
-    # 3. Process Query Image (via API)
-    with st.spinner("Analyzing image..."):
-        query_embedding_list = get_uploaded_image_embedding(uploaded_image)
+    # 3. Process Query Image
+    model, processor = load_clip_model()
+    inputs = processor(images=uploaded_image, return_tensors="pt").to(device)
+    
+    with torch.no_grad():
+        # Get Image Features
+        raw_output = model.get_image_features(**inputs)
+        query_features = extract_features_safe(raw_output)
         
-    if not query_embedding_list:
-        return pd.DataFrame()
-        
-    try:
-        # Result should be the embedding list
-        query_features_np = np.array(query_embedding_list)
-        
-        # If wrapped in extra dimensions (e.g. batch), flatten it
-        if query_features_np.ndim == 2:
-            query_features_np = query_features_np.mean(axis=0) 
-        elif query_features_np.ndim > 2:
-             query_features_np = query_features_np.flatten() 
-            
-        # Normalize
-        norm = np.linalg.norm(query_features_np)
-        if norm > 0:
-            query_features_np = query_features_np / norm
-            
-        # 4. Compute Similarity
-        similarities = (dataset_features @ query_features_np.T)
-        if similarities.ndim > 1:
-            similarities = similarities.squeeze()
-            
-        # 5. Get Top N
-        top_indices_local = similarities.argsort()[::-1][:top_n]
-        top_df_indices = [valid_indices[i] for i in top_indices_local]
-        safe_indices = [i for i in top_df_indices if i in data.index]
-        
-        recommended_df = data.loc[safe_indices].copy()
-        return recommended_df
-        
-    except Exception as e:
-        st.error(f"Processing Error: {e}")
-        return pd.DataFrame()
+        # Ensure it's a tensor
+        if not isinstance(query_features, torch.Tensor):
+             st.error("Unexpected error in image feature extraction.")
+             return pd.DataFrame()
 
+        # Normalize
+        query_features = query_features / query_features.norm(p=2, dim=-1, keepdim=True)
+    
+    query_features_np = query_features.cpu().numpy()
+
+    # 4. Compute Similarity (Image Embedding vs Text Embeddings)
+    # CLIP is trained for this Cross-Modal matching
+    similarities = (dataset_features @ query_features_np.T).squeeze()
+    
+    # 5. Get Top N
+    top_indices_local = similarities.argsort()[::-1][:top_n]
+    
+    # Map back to dataframe indices
+    top_df_indices = [valid_indices[i] for i in top_indices_local]
+    
+    # Ensure indices are valid
+    safe_indices = [i for i in top_df_indices if i in data.index]
+    
+    recommended_df = data.loc[safe_indices].copy()
+    return recommended_df
 
 # Placeholder function can be removed or kept as empty
 def get_text_embeddings(text):
