@@ -16,7 +16,6 @@ import io
 from PIL import Image
 from PIL import Image
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
-st.write("✅ App started successfully")
 
 if "payment_done" not in st.session_state:
     st.session_state["payment_done"] = False

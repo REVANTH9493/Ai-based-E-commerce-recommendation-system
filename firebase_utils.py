@@ -30,7 +30,11 @@ def initialize_firebase_app():
             else:
                 st.error("Firebase credentials not found (checked secrets and serviceAccountKey.json).")
         except Exception as e:
-            st.error(f"Failed to initialize Firebase: {e}")
+            error_msg = str(e)
+            if "invalid_grant" in error_msg or "account not found" in error_msg:
+                 st.error("🚨 Access Denied to Database. The service account key is invalid or expired. Please generate a new 'serviceAccountKey.json' from Firebase Console.")
+            else:
+                 st.error(f"Failed to initialize Firebase: {error_msg}")
 
 @st.cache_data(ttl=600)  # Cache for 10 minutes to avoid hitting DB on every interaction
 def get_data_from_firebase():
