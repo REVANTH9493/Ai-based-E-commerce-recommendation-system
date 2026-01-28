@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 import numpy as np
 import pandas as pd
 from PIL import Image
-from huggingface_hub import InferenceClient
 
 # Load env variables explicitly
 load_dotenv()
@@ -22,10 +21,14 @@ if not HF_TOKEN:
     st.error("⚠️ Missing Hugging Face Token! Please set 'HF_TOKEN' in your .env file or Streamlit secrets.")
     st.stop()
 
-# Initialize Client
-# We use the default inference provider (Hugging Face Inference API) unless specified otherwise
-client = InferenceClient(token=HF_TOKEN)
-MODEL_ID = "sentence-transformers/clip-ViT-B-32"
+# API Endpoint (Feature Extraction Pipeline)
+# We use the raw API URL because it offers better control over the payload (base64) for this specific model
+# Primary Model
+API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/clip-ViT-B-32"
+# Fallback Model
+FALLBACK_URL = "https://api-inference.huggingface.co/models/openai/clip-vit-base-patch32"
+
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 # -----------------------------
 # Image Loading Helper
@@ -65,30 +68,49 @@ def get_dataset_features(data):
         return np.array([]), []
 
 
+def query_hf_api(image_bytes, url):
+    """Helper to send request to HF API"""
+    try:
+        encoded = base64.b64encode(image_bytes).decode("utf-8")
+        response = requests.post(url, headers=headers, json={"inputs": encoded})
+        return response
+    except Exception as e:
+        return None
+
 def get_uploaded_image_embedding(uploaded_image_obj):
     """
-    Sends uploaded image to HF API for feature extraction using InferenceClient.
+    Sends uploaded image to HF API for feature extraction.
     Handles both Streamlit UploadedFile and PIL Image.
     """
     try:
-        # 1. Prepare Image Object for Client
-        # InferenceClient accepts path, URL, or bytes/file-like object
-        # If it's a PIL Image, convert to bytes first
-        img_for_api = uploaded_image_obj
+        # Convert to bytes
+        img_byte_arr = BytesIO()
         
+        # Check if it's a PIL Image or Streamlit UploadedFile
         if isinstance(uploaded_image_obj, Image.Image):
-             img_byte_arr = BytesIO()
              uploaded_image_obj.save(img_byte_arr, format='PNG')
-             img_for_api = img_byte_arr.getvalue()
+        else:
+             # Assume it's a file-like object (Streamlit UploadedFile)
+             uploaded_image_obj.seek(0)
+             img_byte_arr.write(uploaded_image_obj.read())
         
-        # 2. Call Feature Extraction
-        # This automatically handles the API call
-        # Returns a numpy array directly usually
-        response = client.feature_extraction(img_for_api, model=MODEL_ID)
+        image_bytes = img_byte_arr.getvalue()
         
-        return response
+        # Try Primary URL
+        response = query_hf_api(image_bytes, API_URL)
+        
+        # If Model loading or unavailable, try fallback
+        if response is None or response.status_code != 200:
+             # st.warning(f"Primary model unavailable ({response.status_code if response else 'Err'}). Trying fallback...")
+             response = query_hf_api(image_bytes, FALLBACK_URL)
+        
+        if response is None or response.status_code != 200:
+            st.error(f"API Error: {response.text if response else 'Connection Failed'}")
+            return None
+            
+        return response.json()
     except Exception as e:
-        st.error(f"Error fetching embedding via InferenceClient: {e}")
+        st.error(f"Error fetching embedding: {e}")
         return None
 
 def recommend_by_image(uploaded_image, data=None, top_n=5):
@@ -117,30 +139,28 @@ def recommend_by_image(uploaded_image, data=None, top_n=5):
 
     # 3. Process Query Image (via API)
     with st.spinner("Analyzing image..."):
-        query_embedding_np = get_uploaded_image_embedding(uploaded_image)
+        query_embedding_list = get_uploaded_image_embedding(uploaded_image)
         
-    if query_embedding_np is None:
+    if not query_embedding_list:
         return pd.DataFrame()
         
     try:
-        # Result from InferenceClient is often already an ndarray
-        # Ensure it's the right shape
-        if isinstance(query_embedding_np, list):
-            query_embedding_np = np.array(query_embedding_np)
-            
+        # Result should be the embedding list
+        query_features_np = np.array(query_embedding_list)
+        
         # If wrapped in extra dimensions (e.g. batch), flatten it
-        if query_embedding_np.ndim == 2:
-            query_embedding_np = query_embedding_np.mean(axis=0) 
-        elif query_embedding_np.ndim > 2:
-             query_embedding_np = query_embedding_np.flatten() 
+        if query_features_np.ndim == 2:
+            query_features_np = query_features_np.mean(axis=0) 
+        elif query_features_np.ndim > 2:
+             query_features_np = query_features_np.flatten() 
             
         # Normalize
-        norm = np.linalg.norm(query_embedding_np)
+        norm = np.linalg.norm(query_features_np)
         if norm > 0:
-            query_embedding_np = query_embedding_np / norm
+            query_features_np = query_features_np / norm
             
         # 4. Compute Similarity
-        similarities = (dataset_features @ query_embedding_np.T)
+        similarities = (dataset_features @ query_features_np.T)
         if similarities.ndim > 1:
             similarities = similarities.squeeze()
             
