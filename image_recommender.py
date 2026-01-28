@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import numpy as np
 import pandas as pd
 from PIL import Image
+import time
 
 # Load env variables explicitly
 load_dotenv()
@@ -21,8 +22,7 @@ if not HF_TOKEN:
     st.error("⚠️ Missing Hugging Face Token! Please set 'HF_TOKEN' in your .env file or Streamlit secrets.")
     st.stop()
 
-# API Endpoint (Feature Extraction Pipeline)
-# We use the raw API URL because it offers better control over the payload (base64) for this specific model
+# API Endpoint
 # Primary Model
 API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/clip-ViT-B-32"
 # Fallback Model
@@ -51,11 +51,9 @@ def get_dataset_features(data):
     """
     Loads pre-computed embeddings from file since we cannot compute them live on Cloud.
     """
-    # Try loading from local file (expected to be in repo)
     try:
         if os.path.exists("text_embeddings_cache.npy"):
             all_features = np.load("text_embeddings_cache.npy")
-            # We assume indices align with data.index if data hasn't changed drastically.
             if len(all_features) == len(data):
                 return all_features, data.index.tolist()
             else:
@@ -68,14 +66,32 @@ def get_dataset_features(data):
         return np.array([]), []
 
 
-def query_hf_api(image_bytes, url):
-    """Helper to send request to HF API"""
-    try:
-        encoded = base64.b64encode(image_bytes).decode("utf-8")
-        response = requests.post(url, headers=headers, json={"inputs": encoded})
-        return response
-    except Exception as e:
-        return None
+def query_hf_api(image_bytes, url, retries=3):
+    """Helper to send request to HF API with retries for model loading (503)"""
+    encoded = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {"inputs": encoded}
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=20)
+            
+            # If 503 (Model Loading), wait and retry
+            if response.status_code == 503:
+                error_info = response.json()
+                wait_time = error_info.get("estimated_time", 5.0)
+                # Cap wait time to avoid hanging too long
+                wait_time = min(wait_time, 10.0) 
+                # st.warning(f"Model loading... Waiting {wait_time:.1f}s")
+                time.sleep(wait_time)
+                continue
+                
+            return response
+            
+        except Exception as e:
+            # On network error, just return None or raise
+            return None
+            
+    return None
 
 def get_uploaded_image_embedding(uploaded_image_obj):
     """
@@ -99,13 +115,16 @@ def get_uploaded_image_embedding(uploaded_image_obj):
         # Try Primary URL
         response = query_hf_api(image_bytes, API_URL)
         
-        # If Model loading or unavailable, try fallback
+        # If unavailable or error, try fallback
         if response is None or response.status_code != 200:
-             # st.warning(f"Primary model unavailable ({response.status_code if response else 'Err'}). Trying fallback...")
              response = query_hf_api(image_bytes, FALLBACK_URL)
         
-        if response is None or response.status_code != 200:
-            st.error(f"API Error: {response.text if response else 'Connection Failed'}")
+        if response is None:
+            st.error("Connection Failed. Please check your internet or firewall.")
+            return None
+            
+        if response.status_code != 200:
+            st.error(f"API Error ({response.status_code}): {response.text}")
             return None
             
         return response.json()
