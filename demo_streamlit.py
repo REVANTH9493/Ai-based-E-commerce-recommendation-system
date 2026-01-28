@@ -10,12 +10,13 @@ from content_based_filtering import content_based_recommendation
 from collaborative_based_filtering import collaborative_filtering_recommendations
 from hybrid_approach import hybrid_recommendation_filtering
 from item_based_collaborative_filtering import item_based_collaborative_filtering
-import speech_recognition as sr
-from streamlit_mic_recorder import mic_recorder
+import io
 import io
 
 from PIL import Image
+from PIL import Image
 st.set_page_config(page_title="AI based Ecommerce Recommendation system", layout="wide", page_icon="🛍️")
+st.write("✅ App started successfully")
 
 if "payment_done" not in st.session_state:
     st.session_state["payment_done"] = False
@@ -329,36 +330,7 @@ def clear_query_params():
     if current_uid:
         st.query_params["user_id"] = current_uid
 
-def header_voice_search():
-    """
-    Compact version of voice search for the header.
-    Returns the recognized text or None.
-    """
-    audio = mic_recorder(
-        start_prompt="🎙️",
-        stop_prompt="🛑",
-        just_once=True,
-        use_container_width=False,
-        format="wav",
-        key='header_mic'
-    )
-
-    if audio:
-        try:
-            r = sr.Recognizer()
-            audio_data = io.BytesIO(audio['bytes'])
-            with sr.AudioFile(audio_data) as source:
-                audio_recorded = r.record(source)
-            spoken_text = r.recognize_google(audio_recorded)
-            if spoken_text:
-                return spoken_text
-        except Exception as e:
-            st.toast(f"❌ Voice Error: {e}", icon="⚠️")
-            # Also log to console for debugging
-            print(f"Voice Search Error: {e}")
-            pass
-    return None
-from firebase_utils import get_data_from_firebase, get_users_from_firebase, save_user_to_firebase
+from firebase_utils import get_data_from_firebase, get_users_from_firebase, save_user_to_firebase, initialize_firebase_app
 
 @st.cache_data
 def load_and_process_data():
@@ -1026,13 +998,8 @@ def main():
             st.write("")
 
         with inner_col2:
-            # 2. Voice Search Button
-            st.markdown('<div class="header-icon-container" style="margin-right: -10px; margin-left: -10px;">', unsafe_allow_html=True)
-            v_query = header_voice_search()
-            st.markdown('</div>', unsafe_allow_html=True)
-            if v_query:
-                st.session_state['search_input'] = v_query
-                st.rerun()
+            # 2. Voice Search Button (REMOVED for stability)
+            st.write("")
 
         with inner_col3:
             # 3. Text Search box
@@ -1460,4 +1427,5 @@ def main():
     
     st.caption("© 2024 ShopEasy E-Commerce Demo | Powered by Streamlit & Hybrid Recommendation System")
 if __name__ == "__main__":
+    initialize_firebase_app()
     main()
