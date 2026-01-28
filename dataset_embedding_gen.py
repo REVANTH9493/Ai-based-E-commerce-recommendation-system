@@ -8,10 +8,13 @@ from transformers import CLIPProcessor, CLIPModel
 # Run this script LOCALLY to update 'text_embeddings_cache.npy'
 # whenever you change your dataset.
 
-from firebase_utils import get_data_from_firebase
+from firebase_utils import get_data_from_firebase, initialize_firebase_app
 from preprocess_data import process_data
 
 def generate_embeddings():
+    print("Initializing Firebase...")
+    initialize_firebase_app()
+    
     print("Loading Data...")
     raw_data = get_data_from_firebase()
     if raw_data is None:
