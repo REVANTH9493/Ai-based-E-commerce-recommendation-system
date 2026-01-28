@@ -32,6 +32,13 @@ def get_image_features(image, model, processor):
         inputs = processor(images=image, return_tensors="pt").to(device)
         with torch.no_grad():
             outputs = model.get_image_features(**inputs)
+            
+            # Safe extraction for various return types
+            if hasattr(outputs, 'image_embeds'):
+                outputs = outputs.image_embeds
+            elif hasattr(outputs, 'pooler_output'):
+                outputs = outputs.pooler_output
+            
             # Normalize
             outputs = outputs / outputs.norm(p=2, dim=-1, keepdim=True)
             return outputs.cpu().numpy()
