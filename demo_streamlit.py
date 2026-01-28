@@ -990,8 +990,8 @@ def main():
     with h_col1:
         st.markdown('<h1 class="title-text" style="text-align: left; margin-bottom: 0px;">AI-Based E-commerce Recommendation System</h1>', unsafe_allow_html=True)
     with h_col2:
-        # Integrated Header Search Area: [🖼️] [🎙️] [Search... ]
-        inner_col1, inner_col2, inner_col3 = st.columns([0.2, 0.2, 0.6], gap="small")
+        # Integrated Header Search Area: [🖼️] [Search...      ]
+        inner_col1, inner_col3 = st.columns([0.1, 0.9], gap="small")
         
         with inner_col1:
             # 1. image search Button
@@ -1003,10 +1003,6 @@ def main():
                 st.session_state['show_payment'] = False
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-
-        with inner_col2:
-            # 2. Voice Search Button (REMOVED for stability)
-            st.write("")
 
         with inner_col3:
             # 3. Text Search box
