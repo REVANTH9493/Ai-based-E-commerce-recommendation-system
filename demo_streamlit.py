@@ -323,6 +323,10 @@ def toggle_wishlist_func(prod_id):
         user_list.remove(prod_id)
     else:
         user_list.append(prod_id)
+    
+    # Save to Firebase immediately if user is logged in
+    if target_uid != 0:
+        update_wishlist_in_firebase(target_uid, user_list)
 def clear_query_params():
     """Clears query params to prevent sticking to the detail view on refresh."""
     current_uid = st.query_params.get("user_id")
@@ -330,7 +334,7 @@ def clear_query_params():
     if current_uid:
         st.query_params["user_id"] = current_uid
 
-from firebase_utils import get_data_from_firebase, get_users_from_firebase, save_user_to_firebase, initialize_firebase_app
+from firebase_utils import get_data_from_firebase, get_users_from_firebase, save_user_to_firebase, initialize_firebase_app, get_wishlist_from_firebase, update_wishlist_in_firebase
 
 @st.cache_data
 def load_and_process_data():
@@ -788,6 +792,10 @@ def login_page(data):
                                 st.session_state['logged_in'] = True
                                 st.session_state['target_user_id'] = int(uid_str)
                                 st.session_state['user_email'] = user_info.get('email')
+                                
+                                # Fetch Wishlist
+                                if 'wishlists' not in st.session_state: st.session_state['wishlists'] = {}
+                                st.session_state['wishlists'][int(uid_str)] = get_wishlist_from_firebase(uid_str)
                                 st.query_params['user_id'] = uid_str
                                 st.success("Login Successful!")
                                 st.rerun()
@@ -916,6 +924,10 @@ def main():
                      st.session_state['logged_in'] = True
                      st.session_state['target_user_id'] = int(restored_uid_str)
                      st.session_state['user_email'] = users_db[restored_uid_str].get('email')
+                     
+                     # Restore Wishlist
+                     if 'wishlists' not in st.session_state: st.session_state['wishlists'] = {}
+                     st.session_state['wishlists'][int(restored_uid_str)] = get_wishlist_from_firebase(restored_uid_str)
                 # Fallback to product dataset for legacy restoration
                 elif int(restored_uid_str) in data['ID'].values:
                      st.session_state['logged_in'] = True
@@ -1147,7 +1159,7 @@ def main():
                        st.success(f"Found {len(wishlist_products)} items in your wishlist.")
                        display_product_grid(wishlist_products, section_key="wishlist")
 
-                       display_product_grid(wishlist_products, section_key="wishlist")
+                       pass
 
         elif st.session_state.get("active_section") == "Image Search":
             st.markdown("<div class='section-header'>🖼️ Image Search</div>", unsafe_allow_html=True)

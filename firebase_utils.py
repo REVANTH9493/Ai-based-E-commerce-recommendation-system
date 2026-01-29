@@ -95,3 +95,34 @@ def save_user_to_firebase(user_data):
     except Exception as e:
         st.error(f"Error saving user: {e}")
         return False
+
+def get_wishlist_from_firebase(user_id):
+    """
+    Fetches the wishlist (list of product IDs) for a specific user from /users/{user_id}/wishlist.
+    """
+    try:
+        ref = db.reference(f'/users/{user_id}/wishlist')
+        wishlist_data = ref.get()
+        if wishlist_data:
+            if isinstance(wishlist_data, list):
+                 # Filter out any None values/placeholders
+                 return [x for x in wishlist_data if x is not None]
+        return []
+    except Exception as e:
+        st.error(f"Error fetching wishlist: {e}")
+        return []
+
+def update_wishlist_in_firebase(user_id, wishlist_items):
+    """
+    Updates the wishlist for a user.
+    wishlist_items: list of product IDs (int or str)
+    """
+    try:
+        ref = db.reference(f'/users/{user_id}/wishlist')
+        # We save directly as a list
+        ref.set(wishlist_items)
+        return True
+    except Exception as e:
+        st.error(f"Error updating wishlist: {e}")
+        return False
+
