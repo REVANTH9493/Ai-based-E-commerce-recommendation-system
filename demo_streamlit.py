@@ -1152,6 +1152,7 @@ def main():
                  wishlist_products = data[data['ProdID'].isin(w_list)]
                  # Fix: Deduplicate products because data file has multiple entries per prod (ratings)
                  wishlist_products = wishlist_products.drop_duplicates(subset=['ProdID'])
+                 wishlist_products = wishlist_products.reset_index(drop=True)
                  
                  if wishlist_products.empty:
                        st.warning("Wishlist items found, but product details are missing from database.")
@@ -1159,7 +1160,7 @@ def main():
                        st.success(f"Found {len(wishlist_products)} items in your wishlist.")
                        display_product_grid(wishlist_products, section_key="wishlist")
 
-                       pass
+
 
         elif st.session_state.get("active_section") == "Image Search":
             st.markdown("<div class='section-header'>🖼️ Image Search</div>", unsafe_allow_html=True)
