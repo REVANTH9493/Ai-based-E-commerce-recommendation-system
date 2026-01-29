@@ -721,6 +721,10 @@ def display_product_grid(products_df, section_key):
     if products_df is None or products_df.empty:
         st.info("No products found.")
         return
+    
+    # Fix: Reset index to ensure uniqueness. Duplicate indices cause loc[idx] to return wrong/multiple rows.
+    products_df = products_df.reset_index(drop=True)
+    
     cols = st.columns(4)
     indices = products_df.index.tolist()
     for i, idx in enumerate(indices):
