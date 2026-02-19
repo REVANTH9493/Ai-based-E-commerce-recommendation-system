@@ -62,6 +62,7 @@ Total Products: {len(self.data)}"""
             "perfume": "Fragrance",
             "scent": "Fragrance",
             "cologne": "Fragrance",
+            "Fragnance": "Fragrance",
             "makeup": "Makeup",
             "lipstick": "Makeup",
             "eye": "Makeup",
