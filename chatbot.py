@@ -63,8 +63,19 @@ Total Products: {len(self.data)}"""
             "scent": "Fragrance",
             "cologne": "Fragrance",
             "makeup": "Makeup",
+            "lipstick": "Makeup",
+            "eye": "Makeup",
+            "face": "Makeup",
             "hair": "Hair Care",
-            "skin": "Skin Care"
+            "shampoo": "Hair Care",
+            "conditioner": "Hair Care",
+            "skin": "Skin Care",
+            "lotion": "Skin Care",
+            "moisturizer": "Skin Care",
+            "cream": "Skin Care",
+            "nail": "Nail Polish",
+            "polish": "Nail Polish",
+            "lacquer": "Nail Polish"
         }
         
         target_category = None
@@ -105,13 +116,33 @@ Total Products: {len(self.data)}"""
             return cat_results.head(3)
 
         # 2. Fallback to Broad Search (existing logic)
-        mask = (
-            self.data['Name'].str.lower().str.contains(query_lower, na=False) |
-            self.data['Brand'].str.lower().str.contains(query_lower, na=False) |
-            self.data['Category'].str.lower().str.contains(query_lower, na=False)
-        )
-        results = self.data[mask].head(3)
-        return results
+        # 2. Fallback to Broad Search (Smart Keyword)
+        # Remove common conversational fillers
+        fillers = ['suggest', 'recommend', 'show', 'me', 'items', 'products', 'looking', 'for', 'find', 'search', 'buy', 'get', 'a', 'an', 'the', 'i', 'want', 'can', 'you', 'please', 'is', 'are']
+        clean_query_words = [w for w in query_lower.split() if w not in fillers]
+        
+        if clean_query_words:
+            # A. Try searching for the cleaned phrase (e.g. "red lipstick")
+            cleaned_search_str = " ".join(clean_query_words)
+            mask = (
+                self.data['Name'].str.lower().str.contains(cleaned_search_str, na=False) |
+                self.data['Brand'].str.lower().str.contains(cleaned_search_str, na=False) |
+                self.data['Category'].str.lower().str.contains(cleaned_search_str, na=False)
+            )
+            results = self.data[mask].head(3)
+            if not results.empty:
+                return results
+
+            # B. If detailed phrase fails, try ANY word match (OR logic)
+            if len(clean_query_words) > 1:
+                 joined_or = "|".join(clean_query_words)
+                 mask_or = (
+                    self.data['Name'].str.lower().str.contains(joined_or, na=False) |
+                    self.data['Category'].str.lower().str.contains(joined_or, na=False)
+                 )
+                 return self.data[mask_or].head(3)
+        
+        return pd.DataFrame()
     
     def is_shopping_related(self, message):
         """Check if query is shopping/e-commerce related."""
